@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -o pipefail
 
 # --- Color Definitions ---
 GREEN='\033[0;32m'
@@ -45,13 +46,13 @@ if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
   echo "Service is already running with PID $(cat "${PID_FILE}")."
   exit 0
 fi
-if [ ! -f ${ENV_FILE} ]; then
+if [ ! -f "${ENV_FILE}" ]; then
   echo "Info: .env file not found. Service is not configured to run yet."
   exit 0
 fi
 rm -f "${PID_FILE}"
 echo "Service not running. Attempting to start..."
-set -a; source ${ENV_FILE}; set +a
+set -a; source "${ENV_FILE}"; set +a
 cd "${BASE_DIR}"
 nohup ./${EXECUTABLE_NAME} --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
 PID=$!
@@ -113,7 +114,7 @@ if [ ! -f "${PID_FILE}" ]; then
     pkill -f "${EXECUTABLE_NAME}" || true
 else
     PID=$(cat "${PID_FILE}")
-    if ps -p $PID > /dev/null; then
+    if ps -p "$PID" > /dev/null; then
         echo "Stopping process with PID ${PID}..."
         kill "${PID}"
         while kill -0 "${PID}" > /dev/null 2>&1; do echo -n "."; sleep 1; done
@@ -181,7 +182,7 @@ echo -e "${GREEN}✅ All management commands created successfully.${NC}"
 echo -e "${YELLOW}📦 Preparing environment...${NC}"
 if [ ! -f "${EXECUTABLE_PATH}" ]; then
   echo "Downloading binary for the first time from ${DOWNLOAD_URL}..."
-  cd "${BASE_DIR}" && curl -sSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+  cd "${BASE_DIR}" && curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
 fi
 
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
