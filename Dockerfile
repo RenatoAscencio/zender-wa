@@ -8,6 +8,15 @@
 # Use Ubuntu 22.04 as the base system
 FROM ubuntu:22.04
 
+# --- Build-time Arguments and Environment Variables ---
+# These arguments are passed during the build process by GitHub Actions
+ARG BUILD_DATE
+ARG VERSION
+
+# These environment variables make the build arguments available inside the container
+ENV BUILD_DATE=$BUILD_DATE
+ENV VERSION=$VERSION
+
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -25,7 +34,6 @@ COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Declare the volume that will be used for persistent data.
-# This path MUST match the WORKDIR and be absolute.
 VOLUME /data/whatsapp-server
 
 # Expose the port

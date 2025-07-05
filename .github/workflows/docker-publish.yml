@@ -1,42 +1,43 @@
-# -----------------------------------------------------------------------------
-# GitHub Action to Publish Docker Image with Versioning
-#
-# Author: @RenatoAscencio
-# Repository: https://github.com/RenatoAscencio/zender-wa
-# -----------------------------------------------------------------------------
 name: Publish Docker Image
 
-# This workflow runs on pushes to the main branch and on version tags
 on:
   push:
     branches: [ "main" ]
     tags:
-      - 'v*.*.*' # e.g., v1.0.0, v1.1.0
+      - 'v*.*.*'
 
 jobs:
-  # --- First Job: Build and push the Docker image ---
   build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
-      # 1. Check out the repository's code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Extract metadata (like tags) from Git
+      - name: Get Version Tag
+        id: get_version
+        run: |
+          # Use the tag name if it exists, otherwise use the short commit SHA
+          VERSION=${{ github.ref_name }}
+          if [[ "${{ github.ref_type }}" != "tag" ]]; then
+            VERSION=$(echo ${{ github.sha }} | cut -c1-7)
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: renatoascencio/zender-wa
 
-      # 3. Log in to Docker Hub using secrets
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4. Build and push the image to Docker Hub with the correct tags
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
@@ -44,25 +45,22 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Pass build arguments to the Dockerfile
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
-  # --- Second Job: Update the description on Docker Hub ---
   update-readme:
-    # This job depends on the previous one, it only runs if build-and-push succeeds
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      # 1. Check out the code to read the README.md file
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      # 2. Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      
-      # 3. Push the content of README.md to the Docker Hub description
       - name: Update Docker Hub description
         uses: peter-evans/dockerhub-description@v4
         with:
