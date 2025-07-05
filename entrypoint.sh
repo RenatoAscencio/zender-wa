@@ -123,7 +123,6 @@ elif [ ! -f "/data/whatsapp-server/.env" ]; then
     /usr/local/bin/config-wa
 fi
 echo "🕒 Configuring and starting cron job for auto-restart..."
-service cron start
 ( crontab -l 2>/dev/null; echo "@reboot /usr/local/bin/autostart-wa >/dev/null 2>&1"; echo "* * * * * /usr/local/bin/autostart-wa >/dev/null 2>&1" ) | crontab -
 echo "✅ Cron job configured."
 echo "🚀 Triggering service start..."
