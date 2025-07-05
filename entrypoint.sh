@@ -60,7 +60,6 @@ cat << EOG > /usr/local/bin/install-wa
 #!/bin/bash
 set -e
 echo "--- WhatsApp Service Initial Installation ---"
-# Logic to create .env: either from environment variables or interactively
 if [ -n "\$PCODE" ] && [ -n "\$KEY" ]; then
     echo "✅ Environment variables found. Creating .env file automatically..."
     {
@@ -72,12 +71,10 @@ elif [ ! -f "${ENV_FILE}" ]; then
     echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
     /usr/local/bin/config-wa
 fi
-# Configure and start cron
 echo "🕒 Configuring and starting cron job for auto-restart..."
 service cron start
 (crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * ${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot ${AUTOSTART_SCRIPT_PATH}") | crontab -
 echo "✅ Cron job configured."
-# Trigger the first start
 echo "🚀 Triggering service start..."
 /usr/local/bin/autostart-wa
 sleep 3
@@ -125,7 +122,11 @@ cat << EOG > /usr/local/bin/update-wa
 set -e
 echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
 echo "Downloading latest binary..."; cd "${BASE_DIR}"
-curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+# Use -sS for silent curl and -q for quiet unzip
+curl -sSL "${DOWNLOAD_URL}" -o linux.zip
+unzip -oq linux.zip
+rm linux.zip
+chmod +x "${EXECUTABLE_NAME}"
 echo "✅ Update complete. Triggering immediate restart...";
 /usr/local/bin/autostart-wa
 EOG
@@ -148,13 +149,17 @@ chmod +x /usr/local/bin/status-wa
 echo -e "${GREEN}✅ All management commands created successfully.${NC}"
 
 # --- Main Entrypoint Logic ---
-# This part only prepares the environment and then waits.
-
 echo -e "${YELLOW}📦 Preparing environment...${NC}"
 # Download binary only if it doesn't exist in the volume
 if [ ! -f "$EXECUTABLE_PATH" ]; then
   echo "Downloading binary for the first time..."
-  cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
+  cd "$BASE_DIR"
+  # Use -sS for silent curl and -q for quiet unzip
+  curl -sSL "$DOWNLOAD_URL" -o linux.zip
+  unzip -oq linux.zip
+  rm linux.zip
+  chmod +x "$EXECUTABLE_NAME"
+  echo -e "${GREEN}✅ Binary downloaded successfully.${NC}"
 fi
 
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
