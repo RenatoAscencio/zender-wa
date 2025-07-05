@@ -110,6 +110,7 @@ rm /tmp/autostart-wa.tmp
 cat << 'EOG_INSTALL' > /tmp/install-wa.tmp
 #!/bin/bash
 set -e
+AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 echo "--- WhatsApp Service Initial Installation ---"
 if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
     echo "✅ Environment variables found. Creating .env file automatically..."
@@ -123,8 +124,12 @@ elif [ ! -f "/data/whatsapp-server/.env" ]; then
     /usr/local/bin/config-wa
 fi
 echo "🕒 Configuring and starting cron job for auto-restart..."
-( crontab -l 2>/dev/null; echo "@reboot /usr/local/bin/autostart-wa >/dev/null 2>&1"; echo "* * * * * /usr/local/bin/autostart-wa >/dev/null 2>&1" ) | crontab -
-echo "✅ Cron job configured."
+service cron start
+echo "Waiting for cron service to be ready..."
+sleep 5
+( crontab -l 2>/dev/null; echo "@reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"; echo "* * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1" ) | crontab -
+echo "✅ Cron job configured. Waiting a moment..."
+sleep 5
 echo "🚀 Triggering service start..."
 /usr/local/bin/autostart-wa
 sleep 3
