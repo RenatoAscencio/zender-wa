@@ -70,6 +70,37 @@ if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
 elif [ ! -f "${ENV_FILE}" ]; then
     echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
     /usr/local/bin/config-wa
+    exit 0
+fi
+
+# Instructions to set up cron manually
+echo "🕒 Please set up the cron job manually:"
+echo "  crontab -e"
+echo "  Add the following lines at the end of the file:"
+echo "    @reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"
+echo "    * * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"
+
+echo "✅ Cron setup instructions displayed."
+
+echo "🚀 Triggering service start..."
+/usr/local/bin/autostart-wa
+sleep 3
+/usr/local/bin/status-wa
+EOG' > /usr/local/bin/install-wa
+#!/bin/bash
+set -e
+echo "--- WhatsApp Service Initial Installation ---"
+# Logic to create .env: either from environment variables or interactively
+if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
+    echo "✅ Environment variables found. Creating .env file automatically..."
+    {
+        echo "PORT=${PORT:-443}"
+        echo "PCODE=$PCODE"
+        echo "KEY=$KEY"
+    } > "${ENV_FILE}"
+elif [ ! -f "${ENV_FILE}" ]; then
+    echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
+    /usr/local/bin/config-wa
 fi
 # Configure and start cron
 echo "🕒 Configuring and starting cron job for auto-restart..."
