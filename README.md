@@ -65,7 +65,7 @@ Use this method on any generic server with Docker.
     `docker exec -it zender-wa-app bash`
 3.  **Run the Installer:** Inside the console, run the installation command.
     `install-wa`
-4.  The script will guide you to enter your keys, and the service will start.
+4.  The script will guide you to enter your keys, and the service will start. For manual configuration, you can also create a `.env` file from the `.env.example` template before running the installer.
 
 ---
 
@@ -78,6 +78,7 @@ Access the container's console (`docker exec -it zender-wa-app bash`) to use the
 -   `update-wa`: Downloads the latest version of the binary.
 -   `restart-wa`: Restarts the WhatsApp service.
 -   `stop-wa`: Stops the WhatsApp service.
+-   `status-wa`: Checks the current status of the service.
 
 ---
 
