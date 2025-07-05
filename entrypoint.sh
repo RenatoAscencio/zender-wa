@@ -53,7 +53,6 @@ else
   echo "Service is already running."
 fi
 EOG_AUTO
-chmod +x "\$AUTOSTART_SCRIPT_PATH"
 
 # install-wa (The main setup and first-run command)
 cat << EOG > /usr/local/bin/install-wa
@@ -83,7 +82,6 @@ echo "🚀 Triggering service start..."
 sleep 3
 /usr/local/bin/status-wa
 EOG
-chmod +x /usr/local/bin/install-wa
 
 # config-wa (Interactive .env editor)
 cat << EOG > /usr/local/bin/config-wa
@@ -97,14 +95,12 @@ read -p "Enter your KEY [current: \${KEY}]: " KEY_INPUT; KEY=\${KEY_INPUT:-\$KEY
 echo "Creating/updating .env file..."; { echo "PORT=\$PORT"; echo "PCODE=\$PCODE"; echo "KEY=\$KEY"; } > "${ENV_FILE}"
 echo "✅ .env file updated. Please run 'restart-wa' to apply the changes."
 EOG
-chmod +x /usr/local/bin/config-wa
 
 # stop-wa
 cat << EOG > /usr/local/bin/stop-wa
 #!/bin/bash
 echo "🛑 Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped. The cron job will restart it within a minute."
 EOG
-chmod +x /usr/local/bin/stop-wa
 
 # restart-wa
 cat << EOG > /usr/local/bin/restart-wa
@@ -117,7 +113,6 @@ echo "Service stopped. Triggering immediate restart...";
 sleep 3
 /usr/local/bin/status-wa
 EOG
-chmod +x /usr/local/bin/restart-wa
 
 # update-wa
 cat << EOG > /usr/local/bin/update-wa
@@ -129,7 +124,6 @@ curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip 
 echo "✅ Update complete. Triggering immediate restart...";
 /usr/local/bin/autostart-wa
 EOG
-chmod +x /usr/local/bin/update-wa
 
 # status-wa
 cat << EOG > /usr/local/bin/status-wa
@@ -143,8 +137,9 @@ else
 fi
 echo -e "To see detailed logs, run: \${YELLOW}tail -f ${SERVICE_LOG_FILE}\${NC}"
 EOG
-chmod +x /usr/local/bin/status-wa
 
+# Make all scripts executable
+chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
 echo -e "${GREEN}✅ All management commands created successfully.${NC}"
 
 # --- Main Entrypoint Logic ---
