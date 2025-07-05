@@ -37,7 +37,7 @@ echo -e "${YELLOW}🔧 Creando comandos de gestión...${NC}"
 
 # autostart-wa (Script de vigilancia de cron, ahora usa PID)
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
-cat << 'EOG_AUTO' > "${AUTOSTART_SCRIPT_PATH}"
+cat << 'EOG_AUTO' | tr -d '\r' > "${AUTOSTART_SCRIPT_PATH}"
 #!/bin/bash
 # Redirigir toda la salida a un archivo de log
 exec >> ${CRON_LOG_FILE} 2>&1
@@ -69,11 +69,9 @@ PID=$!
 echo "${PID}" > "${PID_FILE}"
 echo "Comando de inicio emitido. Servicio corriendo con PID ${PID}."
 EOG_AUTO
-# FIX: Corregir finales de línea (problema común de Windows/Git)
-sed -i 's/\r$//' "${AUTOSTART_SCRIPT_PATH}"
 
 # install-wa (Comando de configuración inicial)
-cat << 'EOG' > /usr/local/bin/install-wa
+cat << 'EOG' | tr -d '\r' > /usr/local/bin/install-wa
 #!/bin/bash
 set -e
 echo "--- Instalación Inicial del Servicio WhatsApp ---"
@@ -100,11 +98,9 @@ echo "🚀 Disparando inicio del servicio..."
 sleep 3
 /usr/local/bin/status-wa
 EOG
-# FIX: Corregir finales de línea (problema común de Windows/Git)
-sed -i 's/\r$//' /usr/local/bin/install-wa
 
 # config-wa (Editor interactivo de .env)
-cat << 'EOG' > /usr/local/bin/config-wa
+cat << 'EOG' | tr -d '\r' > /usr/local/bin/config-wa
 #!/bin/bash
 set -e
 echo "--- Configuración Interactiva de .env ---"
@@ -115,11 +111,9 @@ read -p "Ingresa tu KEY [actual: ${KEY}]: " KEY_INPUT; KEY=${KEY_INPUT:-$KEY}
 echo "Creando/actualizando archivo .env..."; { echo "PORT=$PORT"; echo "PCODE=$PCODE"; echo "KEY=$KEY"; } > "${ENV_FILE}"
 echo "✅ Archivo .env actualizado. Por favor, ejecuta 'restart-wa' para aplicar los cambios."
 EOG
-# FIX: Corregir finales de línea (problema común de Windows/Git)
-sed -i 's/\r$//' /usr/local/bin/config-wa
 
 # stop-wa (Ahora usa PID para detener el servicio)
-cat << 'EOG' > /usr/local/bin/stop-wa
+cat << 'EOG' | tr -d '\r' > /usr/local/bin/stop-wa
 #!/bin/bash
 echo -e "🛑 Deteniendo el servicio de WhatsApp..."
 if [ ! -f "${PID_FILE}" ]; then
@@ -143,11 +137,9 @@ else
 fi
 echo "Servicio detenido. La tarea de cron lo reiniciará en un minuto."
 EOG
-# FIX: Corregir finales de línea (problema común de Windows/Git)
-sed -i 's/\r$//' /usr/local/bin/stop-wa
 
 # restart-wa (Utiliza los nuevos stop y autostart)
-cat << 'EOG' > /usr/local/bin/restart-wa
+cat << 'EOG' | tr -d '\r' > /usr/local/bin/restart-wa
 #!/bin/bash
 echo "🔄 Reiniciando el servicio de WhatsApp...";
 /usr/local/bin/stop-wa
@@ -157,11 +149,9 @@ echo "Disparando reinicio inmediato...";
 sleep 1
 /usr/local/bin/status-wa
 EOG
-# FIX: Corregir finales de línea (problema común de Windows/Git)
-sed -i 's/\r$//' /usr/local/bin/restart-wa
 
 # update-wa (Utiliza el nuevo stop-wa)
-cat << 'EOG' > /usr/local/bin/update-wa
+cat << 'EOG' | tr -d '\r' > /usr/local/bin/update-wa
 #!/bin/bash
 set -e
 echo "--- Actualizando Binario del Servicio WhatsApp ---"
@@ -172,11 +162,9 @@ curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip
 echo "✅ Actualización completa. Disparando reinicio inmediato...";
 /usr/local/bin/autostart-wa
 EOG
-# FIX: Corregir finales de línea (problema común de Windows/Git)
-sed -i 's/\r$//' /usr/local/bin/update-wa
 
 # status-wa (Ahora usa PID para verificar el estado)
-cat << 'EOG' > /usr/local/bin/status-wa
+cat << 'EOG' | tr -d '\r' > /usr/local/bin/status-wa
 #!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
 echo "--- Estado del Servicio WhatsApp ---"
@@ -187,8 +175,6 @@ else
 fi
 echo -e "Para ver los logs detallados, ejecuta: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
 EOG
-# FIX: Corregir finales de línea (problema común de Windows/Git)
-sed -i 's/\r$//' /usr/local/bin/status-wa
 
 # Hacer todos los scripts ejecutables
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
