@@ -95,7 +95,8 @@ elif [ ! -f "${ENV_FILE}" ]; then
 fi
 echo "🕒 Configuring and starting cron job for auto-restart..."
 service cron start
-(crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * ${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot ${AUTOSTART_SCRIPT_PATH}") | crontab -
+# Update crontab, ensuring no duplicates and redirecting output to /dev/null
+(crontab -l 2>/dev/null | grep -v "autostart-wa" ; echo "@reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1" ; echo "* * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1") | crontab -
 echo "✅ Cron job configured."
 echo "🚀 Triggering service start..."
 /usr/local/bin/autostart-wa
