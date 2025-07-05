@@ -9,6 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # --- Display Build Information on Every Start ---
+# This block now runs unconditionally on every container start/redeploy.
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
 echo -e "${CYAN}🚀 Starting WhatsApp Server Container${NC}"
 echo -e "${CYAN}   Version:    ${VERSION:-unknown}${NC}"
@@ -23,11 +24,13 @@ EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
 DOWNLOAD_URL="https://raw.anycdn.link/wa/linux.zip"
 
 # --- Always-on Services and Commands ---
-echo -e "${YELLOW}🕒 Starting cron daemon...${NC}"
+# The cron job is always configured and running in the background.
+echo -e "${YELLOW}🕒 Starting and configuring cron daemon...${NC}"
 service cron start
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 cat << EOG_AUTO > "\$AUTOSTART_SCRIPT_PATH"
 #!/bin/bash
+# Log execution to a file for debugging
 exec >> ${BASE_DIR}/cron.log 2>&1
 echo "---"
 echo "Cron job ran at: \$(date)"
@@ -49,8 +52,63 @@ chmod +x "\$AUTOSTART_SCRIPT_PATH"
 echo -e "${GREEN}✅ Cron job for auto-restart is active.${NC}"
 
 # --- Management Commands Creation ---
-# (install-wa, config-wa, stop-wa, restart-wa, update-wa)
-# ... (El resto de la creación de comandos sigue igual)
+# These are created on every start to ensure they are always up-to-date.
+# install-wa
+cat << EOG > /usr/local/bin/install-wa
+#!/bin/bash
+set -e
+echo "--- WhatsApp Service Initial Installation ---"
+if [ ! -f "${ENV_FILE}" ]; then
+    echo "⚠️ No .env file found. Running initial configuration..."
+    config-wa
+fi
+echo "🚀 Triggering service start..."
+autostart-wa
+echo "✅ Service start command issued. The cron job will now manage it."
+EOG
+
+# config-wa
+cat << EOG > /usr/local/bin/config-wa
+#!/bin/bash
+set -e
+echo "--- Interactive .env Configuration ---"
+if [ -f "${ENV_FILE}" ]; then set -a; source "${ENV_FILE}"; set +a; fi
+read -p "Enter PORT [current: \${PORT:-443}]: " PORT_INPUT; PORT=\${PORT_INPUT:-\$PORT}
+read -p "Enter your PCODE [current: \${PCODE}]: " PCODE_INPUT; PCODE=\${PCODE_INPUT:-\$PCODE}
+read -p "Enter your KEY [current: \${KEY}]: " KEY_INPUT; KEY=\${KEY_INPUT:-\$KEY}
+echo "Creating/updating .env file..."; { echo "PORT=\$PORT"; echo "PCODE=\$PCODE"; echo "KEY=\$KEY"; } > "${ENV_FILE}"
+echo "✅ .env file updated. Please run 'restart-wa' to apply the changes."
+EOG
+
+# stop-wa
+cat << EOG > /usr/local/bin/stop-wa
+#!/bin/bash
+echo "🛑 Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped. The cron job will restart it within a minute."
+EOG
+
+# restart-wa (Now with immediate start)
+cat << EOG > /usr/local/bin/restart-wa
+#!/bin/bash
+echo "🔄 Restarting the WhatsApp service...";
+pkill -f "${EXECUTABLE_NAME}" || true;
+sleep 2;
+echo "Service stopped. Triggering immediate restart...";
+autostart-wa
+echo "✅ Restart command issued."
+EOG
+
+# update-wa
+cat << EOG > /usr/local/bin/update-wa
+#!/bin/bash
+set -e
+echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
+echo "Downloading latest binary..."; cd "${BASE_DIR}"
+curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+echo "✅ Update complete. Triggering immediate restart...";
+autostart-wa
+EOG
+
+chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa
 
 # --- Main Entrypoint Logic ---
 # Download binary only if it doesn't exist in the volume
@@ -62,8 +120,8 @@ fi
 # Check if the service is configured (i.e., .env file exists)
 if [ -f "$ENV_FILE" ]; then
   echo -e "${GREEN}✅ Previous installation detected. Starting service automatically...${NC}"
-  set -a; source "$ENV_FILE"; set +a
-  exec ./"${EXECUTABLE_NAME}" --pcode="\$PCODE" --key="\$KEY" --host="0.0.0.0" --port="\$PORT"
+  # Trigger the autostart script to launch the service
+  autostart-wa
 else
   # If not configured, go into standby mode
   echo -e "\n${CYAN}--------------------------------------------------------${NC}"
@@ -80,8 +138,8 @@ else
   echo "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
   echo "   - ${GREEN}restart-wa${NC} : Restarts the service."
   echo "   - ${GREEN}stop-wa${NC}    : Stops the service."
-  echo ""
-  echo -e "${YELLOW}Note:${NC} To see live logs, run 'docker logs -f <container_name>' on your HOST machine."
   echo -e "${CYAN}--------------------------------------------------------${NC}"
-  exec sleep infinity
 fi
+
+# Keep the container alive indefinitely
+exec sleep infinity
