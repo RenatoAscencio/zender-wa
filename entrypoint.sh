@@ -53,13 +53,13 @@ else
   echo "Service is already running."
 fi
 EOG_AUTO
-chmod +x "\$AUTOSTART_SCRIPT_PATH"
 
 # install-wa (The main setup and first-run command)
 cat << EOG > /usr/local/bin/install-wa
 #!/bin/bash
 set -e
 echo "--- WhatsApp Service Initial Installation ---"
+# Logic to create .env: either from environment variables or interactively
 if [ -n "\$PCODE" ] && [ -n "\$KEY" ]; then
     echo "✅ Environment variables found. Creating .env file automatically..."
     {
@@ -71,16 +71,17 @@ elif [ ! -f "${ENV_FILE}" ]; then
     echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
     /usr/local/bin/config-wa
 fi
+# Configure and start cron
 echo "🕒 Configuring and starting cron job for auto-restart..."
 service cron start
 (crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * ${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot ${AUTOSTART_SCRIPT_PATH}") | crontab -
 echo "✅ Cron job configured."
+# Trigger the first start
 echo "🚀 Triggering service start..."
 /usr/local/bin/autostart-wa
 sleep 3
 /usr/local/bin/status-wa
 EOG
-chmod +x /usr/local/bin/install-wa
 
 # config-wa (Interactive .env editor)
 cat << EOG > /usr/local/bin/config-wa
@@ -94,14 +95,12 @@ read -p "Enter your KEY [current: \${KEY}]: " KEY_INPUT; KEY=\${KEY_INPUT:-\$KEY
 echo "Creating/updating .env file..."; { echo "PORT=\$PORT"; echo "PCODE=\$PCODE"; echo "KEY=\$KEY"; } > "${ENV_FILE}"
 echo "✅ .env file updated. Please run 'restart-wa' to apply the changes."
 EOG
-chmod +x /usr/local/bin/config-wa
 
 # stop-wa
 cat << EOG > /usr/local/bin/stop-wa
 #!/bin/bash
 echo "🛑 Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped. The cron job will restart it within a minute."
 EOG
-chmod +x /usr/local/bin/stop-wa
 
 # restart-wa
 cat << EOG > /usr/local/bin/restart-wa
@@ -114,7 +113,6 @@ echo "Service stopped. Triggering immediate restart...";
 sleep 3
 /usr/local/bin/status-wa
 EOG
-chmod +x /usr/local/bin/restart-wa
 
 # update-wa
 cat << EOG > /usr/local/bin/update-wa
@@ -122,15 +120,10 @@ cat << EOG > /usr/local/bin/update-wa
 set -e
 echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
 echo "Downloading latest binary..."; cd "${BASE_DIR}"
-# Use -sS for silent curl and -q for quiet unzip
-curl -sSL "${DOWNLOAD_URL}" -o linux.zip
-unzip -oq linux.zip
-rm linux.zip
-chmod +x "${EXECUTABLE_NAME}"
+curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
 echo "✅ Update complete. Triggering immediate restart...";
 /usr/local/bin/autostart-wa
 EOG
-chmod +x /usr/local/bin/update-wa
 
 # status-wa
 cat << EOG > /usr/local/bin/status-wa
@@ -144,22 +137,19 @@ else
 fi
 echo -e "To see detailed logs, run: \${YELLOW}tail -f ${SERVICE_LOG_FILE}\${NC}"
 EOG
-chmod +x /usr/local/bin/status-wa
 
+# Make all scripts executable
+chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
 echo -e "${GREEN}✅ All management commands created successfully.${NC}"
 
 # --- Main Entrypoint Logic ---
+# This part only prepares the environment and then waits.
+
 echo -e "${YELLOW}📦 Preparing environment...${NC}"
 # Download binary only if it doesn't exist in the volume
 if [ ! -f "$EXECUTABLE_PATH" ]; then
   echo "Downloading binary for the first time..."
-  cd "$BASE_DIR"
-  # Use -sS for silent curl and -q for quiet unzip
-  curl -sSL "$DOWNLOAD_URL" -o linux.zip
-  unzip -oq linux.zip
-  rm linux.zip
-  chmod +x "$EXECUTABLE_NAME"
-  echo -e "${GREEN}✅ Binary downloaded successfully.${NC}"
+  cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
 fi
 
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
