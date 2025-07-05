@@ -110,7 +110,7 @@ if pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
 else
     echo -e "${RED}❌ Service is STOPPED.${NC}"
 fi
-echo "To see detailed logs, run: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
+echo -e "To see detailed logs, run: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
 EOG
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa
 
