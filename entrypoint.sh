@@ -184,7 +184,7 @@ if [ ! -f "/data/whatsapp-server/titansys-whatsapp-linux" ]; then
   chmod +x "titansys-whatsapp-linux"
 fi
 
-cat << 'EOG_MSG'
+cat << EOG_MSG
 
 ${CYAN}--------------------------------------------------------${NC}
 ${RED}🔴 ACTION REQUIRED:${NC} Please run ${GREEN}install-wa${NC}
