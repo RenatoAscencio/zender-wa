@@ -8,6 +8,13 @@ RED='\033[0;31m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
+# --- Display Build Information on Every Start ---
+echo -e "\n${CYAN}--------------------------------------------------------${NC}"
+echo -e "${CYAN}🚀 Starting WhatsApp Server Container${NC}"
+echo -e "${CYAN}   Version:    ${VERSION:-unknown}${NC}"
+echo -e "${CYAN}   Build Date: ${BUILD_DATE:-not specified}${NC}"
+echo -e "${CYAN}--------------------------------------------------------${NC}\n"
+
 # --- Environment and File Definitions ---
 BASE_DIR="/data/whatsapp-server"
 ENV_FILE="${BASE_DIR}/.env"
@@ -18,22 +25,13 @@ EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
 DOWNLOAD_URL="https://raw.anycdn.link/wa/linux.zip"
 
 # --- Clean Up Logs on Every Start ---
-# This ensures a fresh log file on every redeploy.
 echo -e "${YELLOW}🧹 Clearing previous log files...${NC}"
 rm -f "${SERVICE_LOG_FILE}" "${CRON_LOG_FILE}" || true
-
-# --- Display Build Information on Every Start ---
-echo -e "\n${CYAN}--------------------------------------------------------${NC}"
-echo -e "${CYAN}🚀 Starting WhatsApp Server Container${NC}"
-echo -e "${CYAN}   Version:    ${VERSION:-unknown}${NC}"
-echo -e "${CYAN}   Build Date: ${BUILD_DATE:-not specified}${NC}"
-echo -e "${CYAN}--------------------------------------------------------${NC}\n"
 
 # --- Always-on Services and Commands ---
 echo -e "${YELLOW}🕒 Starting and configuring cron daemon...${NC}"
 service cron start
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
-# Create a robust autostart script with logging
 cat << EOG_AUTO > "\$AUTOSTART_SCRIPT_PATH"
 #!/bin/bash
 exec >> ${CRON_LOG_FILE} 2>&1
@@ -46,7 +44,6 @@ fi
 set -a; source ${ENV_FILE}; set +a
 if ! /usr/bin/pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
   echo "Service not running. Attempting to start..."
-  # Start the service and redirect its output to the service log file
   cd "${BASE_DIR}" && ./"${EXECUTABLE_NAME}" --pcode="\$PCODE" --key="\$KEY" --host="0.0.0.0" --port="\$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
   echo "Start command issued."
 else
@@ -85,7 +82,12 @@ else
   echo "   2. Run the command: ${GREEN}install-wa${NC}"
   echo ""
   echo -e "${CYAN}Available Commands:${NC}"
-  echo "   - ${GREEN}install-wa${NC}, ${GREEN}config-wa${NC}, ${GREEN}update-wa${NC}, ${GREEN}restart-wa${NC}, ${GREEN}stop-wa${NC}, ${GREEN}status-wa${NC}"
+  echo -e "   - ${GREEN}install-wa${NC} : Performs the first-time setup."
+  echo -e "   - ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
+  echo -e "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
+  echo -e "   - ${GREEN}restart-wa${NC} : Restarts the service."
+  echo -e "   - ${GREEN}stop-wa${NC}    : Stops the service."
+  echo -e "   - ${GREEN}status-wa${NC}  : Checks the current status of the service."
   echo -e "${CYAN}--------------------------------------------------------${NC}"
 fi
 
