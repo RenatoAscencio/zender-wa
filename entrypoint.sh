@@ -126,7 +126,7 @@ echo "✅ Update complete. Triggering immediate restart...";
 EOG
 
 # status-wa
-cat << EOG > /usr/local/bin/status-wa
+cat << EOG > "/usr/local/bin/status-wa"
 #!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
 echo "--- WhatsApp Service Status ---"
@@ -136,7 +136,7 @@ else
     echo -e "${RED}❌ Service is STOPPED.${NC}"
 fi
 echo -e "To see detailed logs, run: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
-EOG_AUTO
+EOG
 
 # Make all scripts executable
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
