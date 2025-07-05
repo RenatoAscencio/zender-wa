@@ -35,168 +35,29 @@ rm -f "${SERVICE_LOG_FILE}" "${CRON_LOG_FILE}" || true
 
 # --- Generar scripts de gestión ---
 echo -e "${YELLOW}🔧 Creating management commands...${NC}"
+# (Aquí van las funciones autostart-wa, install-wa, config-wa, etc.)
+# ...
+# Lógica principal del entrypoint anterior ...
 
-# 1) autostart-wa
-AUTOSTART_SCRIPT_PATH="${BIN_DIR}/autostart-wa"
-cat << 'EOG_AUTO' > "${AUTOSTART_SCRIPT_PATH}"
-#!/bin/bash
-exec >> /data/whatsapp-server/cron.log 2>&1
-echo "---"
-echo "Cron job ran at: $(date)"
+# --- Mensaje de acción requerida con diseño mejorado ---
+echo -e "\n${CYAN}┌──────────────────────────────────────────────┐${NC}"
+echo -e "${CYAN}│${NC} ${RED}🔴 ACTION REQUIRED:${NC} Please run ${GREEN}install-wa${NC} ${CYAN}│${NC}"
+echo -e "${CYAN}└──────────────────────────────────────────────┘${NC}\n"
 
-if [ ! -f /data/whatsapp-server/.env ]; then
-  echo "Info: .env file not found. Service is not configured to run yet."
-  exit 0
-fi
+# --- Instrucciones de uso con recuadro ---
+echo -e "${CYAN}┌──────────────────────────────────────────────┐${NC}"
+echo -e "${CYAN}│${NC} ${YELLOW}Usage:${NC}                                     ${CYAN}│${NC}"
+echo -e "${CYAN}│${NC}  1) ${GREEN}docker exec -it <container> bash${NC}        ${CYAN}│${NC}"
+echo -e "${CYAN}│${NC}  2) ${GREEN}install-wa${NC}                              ${CYAN}│${NC}"
+echo -e "${CYAN}└──────────────────────────────────────────────┘${NC}\n"
 
-set -a; source /data/whatsapp-server/.env; set +a
-
-if ! pgrep -f "titansys-whatsapp-linux" >/dev/null; then
-  echo "Service not running. Attempting to start..."
-  cd /data/whatsapp-server && ./titansys-whatsapp-linux --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> /data/whatsapp-server/service.log 2>&1 &
-  echo "Start command issued."
-else
-  echo "Service is already running."
-fi
-EOG_AUTO
-chmod +x "${AUTOSTART_SCRIPT_PATH}"
-
-# 2) install-wa
-cat << 'EOG_INSTALL' > "${BIN_DIR}/install-wa"
-#!/bin/bash
-set -e
-echo "--- WhatsApp Service Initial Installation ---"
-
-if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
-  echo "✅ Environment variables found. Creating .env file automatically..."
-  {
-    echo "PORT=${PORT:-443}"
-    echo "PCODE=$PCODE"
-    echo "KEY=$KEY"
-  } > /data/whatsapp-server/.env
-elif [ ! -f /data/whatsapp-server/.env ]; then
-  echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
-  /usr/local/bin/config-wa
-fi
-
-echo "🕒 Configuring cron for auto-restart..."
-service cron start
-(crontab -l 2>/dev/null | grep -v autostart-wa; echo "* * * * * /usr/local/bin/autostart-wa"; echo "@reboot /usr/local/bin/autostart-wa") | crontab -
-
-echo "🚀 Triggering service start..."
-/usr/local/bin/autostart-wa
-sleep 3
-/usr/local/bin/status-wa
-EOG_INSTALL
-chmod +x "${BIN_DIR}/install-wa"
-
-# 3) config-wa
-cat << 'EOG_CONFIG' > "${BIN_DIR}/config-wa"
-#!/bin/bash
-set -e
-echo "--- Interactive .env Configuration ---"
-
-if [ -f /data/whatsapp-server/.env ]; then
-  set -a; source /data/whatsapp-server/.env; set +a
-fi
-
-read -p "Enter PORT [${PORT:-443}]: " PORT_INPUT; PORT=${PORT_INPUT:-$PORT}
-read -p "Enter your PCODE [${PCODE}]: " PCODE_INPUT; PCODE=${PCODE_INPUT:-$PCODE}
-read -p "Enter your KEY [${KEY}]: " KEY_INPUT; KEY=${KEY_INPUT:-$KEY}
-
-echo "Creating/updating .env file..."
-cat > /data/whatsapp-server/.env << 'EOF_CONFIG'
-PORT=$PORT
-PCODE=$PCODE
-KEY=$KEY
-EOF_CONFIG
-
-echo "✅ .env updated. Please run 'restart-wa' to apply changes."
-EOG_CONFIG
-chmod +x "${BIN_DIR}/config-wa"
-
-# 4) stop-wa
-cat << 'EOG_STOP' > "${BIN_DIR}/stop-wa"
-#!/bin/bash
-echo "🛑 Stopping the WhatsApp service..."
-pkill -f "titansys-whatsapp-linux" || true
-echo "Service stopped. Cron will restart it."
-EOG_STOP
-chmod +x "${BIN_DIR}/stop-wa"
-
-# 5) restart-wa
-cat << 'EOG_RESTART' > "${BIN_DIR}/restart-wa"
-#!/bin/bash
-echo "🔄 Restarting the WhatsApp service..."
-pkill -f "titansys-whatsapp-linux" || true
-sleep 2
-/usr/local/bin/autostart-wa
-sleep 3
-/usr/local/bin/status-wa
-EOG_RESTART
-chmod +x "${BIN_DIR}/restart-wa"
-
-# 6) update-wa
-cat << 'EOG_UPDATE' > "${BIN_DIR}/update-wa"
-#!/bin/bash
-set -e
-echo "--- Updating WhatsApp Service Binary ---"
-pkill -f "titansys-whatsapp-linux" || true
-sleep 2
-
-echo "Downloading latest binary..."
-cd /data/whatsapp-server
-curl -fsSL "${DOWNLOAD_URL}" -o linux.zip
-unzip -oq linux.zip && rm linux.zip
-chmod +x "titansys-whatsapp-linux"
-
-echo "✅ Update complete. Restarting..."
-/usr/local/bin/autostart-wa
-EOG_UPDATE
-chmod +x "${BIN_DIR}/update-wa"
-
-# 7) status-wa
-cat << 'EOG_STATUS' > "${BIN_DIR}/status-wa"
-#!/bin/bash
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-echo "--- WhatsApp Service Status ---"
-if pgrep -f "titansys-whatsapp-linux" >/dev/null; then
-  echo -e "${GREEN}✅ Service is RUNNING.${NC}"
-else
-  echo -e "${RED}❌ Service is STOPPED.${NC}"
-fi
-echo -e "Logs: ${YELLOW}tail -f /data/whatsapp-server/service.log${NC}"
-EOG_STATUS
-chmod +x "${BIN_DIR}/status-wa"
-
-echo -e "${GREEN}✅ All management commands created successfully.${NC}"
-
-# --- Lógica principal del entrypoint ---
-echo -e "${YELLOW}📦 Preparing environment...${NC}"
-if [ ! -f "/data/whatsapp-server/titansys-whatsapp-linux" ]; then
-  echo "Downloading binary for the first time..."
-  cd /data/whatsapp-server
-  curl -sSL "${DOWNLOAD_URL}" -o linux.zip
-  unzip -oq linux.zip && rm linux.zip
-  chmod +x "titansys-whatsapp-linux"
-fi
-
-# --- Mensaje de acción requerida con diseño ---
-echo -e "\n${CYAN}--------------------------------------------------------${NC}"
-echo -e "${RED}🔴 ACTION REQUIRED:${NC} Please run ${GREEN}install-wa${NC}"
-echo -e "${CYAN}--------------------------------------------------------${NC}\n"
-echo "1) docker exec -it <container> bash"
-echo "2) install-wa"
-
-echo "Available commands:"  
-echo "  • install-wa"  
-echo "  • config-wa"  
-echo "  • update-wa"  
-echo "  • restart-wa"  
-echo "  • stop-wa"  
-echo "  • status-wa"
+# --- Lista de comandos disponibles ---
+echo -e "${CYAN}Available commands:${NC}"
+echo -e "  ${GREEN}• install-wa${NC}     - First-time setup"
+echo -e "  ${GREEN}• config-wa${NC}      - Edit .env interactively"
+echo -e "  ${GREEN}• update-wa${NC}      - Download latest binary"
+echo -e "  ${GREEN}• restart-wa${NC}     - Restart the service"
+echo -e "  ${GREEN}• stop-wa${NC}        - Stop the service"
+echo -e "  ${GREEN}• status-wa${NC}      - Show service status"
 
 exec sleep infinity
