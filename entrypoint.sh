@@ -61,14 +61,21 @@ cat << EOG > /usr/local/bin/install-wa
 #!/bin/bash
 set -e
 echo "--- WhatsApp Service Initial Installation ---"
-if [ ! -f "${ENV_FILE}" ]; then
-    echo "⚠️ No .env file found. Running initial configuration..."
-    config-wa
+if [ -n "\$PCODE" ] && [ -n "\$KEY" ]; then
+    echo "✅ Environment variables found. Creating .env file automatically..."
+    {
+        echo "PORT=\${PORT:-443}"
+        echo "PCODE=\$PCODE"
+        echo "KEY=\$KEY"
+    } > "${ENV_FILE}"
+elif [ ! -f "${ENV_FILE}" ]; then
+    echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
+    /usr/local/bin/config-wa
 fi
 echo "🚀 Triggering service start..."
-autostart-wa
+/usr/local/bin/autostart-wa
 sleep 3
-status-wa
+/usr/local/bin/status-wa
 EOG
 cat << EOG > /usr/local/bin/config-wa
 #!/bin/bash
@@ -91,9 +98,9 @@ echo "🔄 Restarting the WhatsApp service...";
 pkill -f "${EXECUTABLE_NAME}" || true;
 sleep 2;
 echo "Service stopped. Triggering immediate restart...";
-autostart-wa
+/usr/local/bin/autostart-wa
 sleep 3
-status-wa
+/usr/local/bin/status-wa
 EOG
 cat << EOG > /usr/local/bin/update-wa
 #!/bin/bash
@@ -102,11 +109,10 @@ echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" |
 echo "Downloading latest binary..."; cd "${BASE_DIR}"
 curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
 echo "✅ Update complete. Triggering immediate restart...";
-autostart-wa
+/usr/local/bin/autostart-wa
 EOG
 cat << EOG > /usr/local/bin/status-wa
 #!/bin/bash
-# Add color definitions inside the script so it's self-contained
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
 echo "--- WhatsApp Service Status ---"
 if pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
@@ -119,16 +125,16 @@ EOG
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa
 
 # --- Main Entrypoint Logic ---
+# Download binary only if it doesn't exist in the volume
 if [ ! -f "$EXECUTABLE_PATH" ]; then
   echo -e "${YELLOW}📦 Binary not found. Performing first-time download...${NC}"
   cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
 fi
 
-if [ -f "$ENV_FILE" ]; then
-  echo -e "${GREEN}✅ Configuration file found. Starting service in the background...${NC}"
-  autostart-wa
-  sleep 3
-  status-wa
+# Check if the service should be started automatically or wait for manual setup
+if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
+  echo -e "${GREEN}✅ Environment variables detected. Running automatic installation...${NC}"
+  /usr/local/bin/install-wa
 else
   echo -e "\n${CYAN}--------------------------------------------------------${NC}"
   echo -e "${RED}🔴 ACTION REQUIRED: Service is not configured.${NC}"
@@ -148,4 +154,5 @@ else
   echo -e "${CYAN}--------------------------------------------------------${NC}"
 fi
 
+# Keep the container alive indefinitely
 exec sleep infinity
