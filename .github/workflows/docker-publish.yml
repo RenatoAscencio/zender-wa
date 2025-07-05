@@ -1,43 +1,62 @@
+# -----------------------------------------------------------------------------
+# GitHub Action to Publish Docker Image with Versioning
+#
+# Author: @RenatoAscencio
+# Repository: https://github.com/RenatoAscencio/zender-wa
+# -----------------------------------------------------------------------------
 name: Publish Docker Image
 
+# This workflow runs on pushes to the main branch and on version tags
 on:
   push:
     branches: [ "main" ]
     tags:
-      - 'v*.*.*'
+      - 'v*.*.*' # e.g., v1.0.0, v1.1.0
 
 jobs:
+  # --- First Job: Build and push the Docker image ---
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
+      # 1. Check out the repository's code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Get Version Tag
-        id: get_version
+      # 2. Set up build-time variables (Version and Build Date)
+      - name: Set Build-time Variables
+        id: build_vars
         run: |
-          # Use the tag name if it exists, otherwise use the short commit SHA
+          # Use the tag name if it exists, otherwise use the short commit SHA for the version
           VERSION=${{ github.ref_name }}
           if [[ "${{ github.ref_type }}" != "tag" ]]; then
             VERSION=$(echo ${{ github.sha }} | cut -c1-7)
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
 
+      # 3. Extract metadata (like tags and labels) from Git
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: renatoascencio/zender-wa
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
+      # 4. Log in to Docker Hub using secrets
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # 5. Build and push the image to Docker Hub with the correct tags and build args
       - name: Build and push image
         uses: docker/build-push-action@v5
         with:
@@ -45,12 +64,13 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # Pass build arguments to the Dockerfile
           build-args: |
             VERSION=${{ env.VERSION }}
-            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            BUILD_DATE=${{ env.BUILD_DATE }}
 
+  # --- Second Job: Update the description on Docker Hub ---
   update-readme:
+    # This job depends on the previous one
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:

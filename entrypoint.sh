@@ -106,13 +106,15 @@ autostart-wa
 EOG
 cat << EOG > /usr/local/bin/status-wa
 #!/bin/bash
+# Add color definitions inside the script so it's self-contained
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
 echo "--- WhatsApp Service Status ---"
 if pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
-    echo -e "${GREEN}✅ Service is RUNNING.${NC}"
+    echo -e "\${GREEN}✅ Service is RUNNING.\${NC}"
 else
-    echo -e "${RED}❌ Service is STOPPED.${NC}"
+    echo -e "\${RED}❌ Service is STOPPED.\${NC}"
 fi
-echo -e "To see detailed logs, run: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
+echo -e "To see detailed logs, run: \${YELLOW}tail -f ${SERVICE_LOG_FILE}\${NC}"
 EOG
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa
 
