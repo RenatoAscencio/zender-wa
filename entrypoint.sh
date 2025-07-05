@@ -55,31 +55,84 @@ chmod +x "\$AUTOSTART_SCRIPT_PATH"
 echo -e "${GREEN}✅ Cron job for auto-restart is active.${NC}"
 
 # --- Management Commands Creation ---
-# (install-wa, config-wa, stop-wa, restart-wa, update-wa, status-wa)
-# ... (El resto de la creación de comandos sigue igual)
+cat << EOG > /usr/local/bin/install-wa
+#!/bin/bash
+set -e
+echo "--- WhatsApp Service Initial Installation ---"
+if [ ! -f "${ENV_FILE}" ]; then
+    echo "⚠️ No .env file found. Running initial configuration..."
+    config-wa
+fi
+echo "🚀 Triggering service start..."
+autostart-wa
+sleep 3
+status-wa
+EOG
+cat << EOG > /usr/local/bin/config-wa
+#!/bin/bash
+set -e
+echo "--- Interactive .env Configuration ---"
+if [ -f "${ENV_FILE}" ]; then set -a; source "${ENV_FILE}"; set +a; fi
+read -p "Enter PORT [current: \${PORT:-443}]: " PORT_INPUT; PORT=\${PORT_INPUT:-\$PORT}
+read -p "Enter your PCODE [current: \${PCODE}]: " PCODE_INPUT; PCODE=\${PCODE_INPUT:-\$PCODE}
+read -p "Enter your KEY [current: \${KEY}]: " KEY_INPUT; KEY=\${KEY_INPUT:-\$KEY}
+echo "Creating/updating .env file..."; { echo "PORT=\$PORT"; echo "PCODE=\$PCODE"; echo "KEY=\$KEY"; } > "${ENV_FILE}"
+echo "✅ .env file updated. Please run 'restart-wa' to apply the changes."
+EOG
+cat << EOG > /usr/local/bin/stop-wa
+#!/bin/bash
+echo "🛑 Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped. The cron job will restart it within a minute."
+EOG
+cat << EOG > /usr/local/bin/restart-wa
+#!/bin/bash
+echo "🔄 Restarting the WhatsApp service...";
+pkill -f "${EXECUTABLE_NAME}" || true;
+sleep 2;
+echo "Service stopped. Triggering immediate restart...";
+autostart-wa
+sleep 3
+status-wa
+EOG
+cat << EOG > /usr/local/bin/update-wa
+#!/bin/bash
+set -e
+echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
+echo "Downloading latest binary..."; cd "${BASE_DIR}"
+curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+echo "✅ Update complete. Triggering immediate restart...";
+autostart-wa
+EOG
+cat << EOG > /usr/local/bin/status-wa
+#!/bin/bash
+echo "--- WhatsApp Service Status ---"
+if pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
+    echo -e "${GREEN}✅ Service is RUNNING.${NC}"
+else
+    echo -e "${RED}❌ Service is STOPPED.${NC}"
+fi
+echo "To see detailed logs, run: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
+EOG
+chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa
 
 # --- Main Entrypoint Logic ---
-# Download binary only if it doesn't exist in the volume
 if [ ! -f "$EXECUTABLE_PATH" ]; then
   echo -e "${YELLOW}📦 Binary not found. Performing first-time download...${NC}"
   cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
 fi
 
-# Check if the service is configured (i.e., .env file exists)
 if [ -f "$ENV_FILE" ]; then
   echo -e "${GREEN}✅ Configuration file found. Starting service in the background...${NC}"
   autostart-wa
   sleep 3
   status-wa
 else
-  # If not configured, go into standby mode
   echo -e "\n${CYAN}--------------------------------------------------------${NC}"
   echo -e "${RED}🔴 ACTION REQUIRED: Service is not configured.${NC}"
   echo -e "${CYAN}--------------------------------------------------------${NC}"
   echo "The container is now in standby mode."
   echo ""
-  echo "   1. Open the console for this container."
-  echo "   2. Run the command: ${GREEN}install-wa${NC}"
+  echo -e "   1. Open the console for this container."
+  echo -e "   2. Run the command: ${GREEN}install-wa${NC}"
   echo ""
   echo -e "${CYAN}Available Commands:${NC}"
   echo -e "   - ${GREEN}install-wa${NC} : Performs the first-time setup."
@@ -91,5 +144,4 @@ else
   echo -e "${CYAN}--------------------------------------------------------${NC}"
 fi
 
-# Keep the container alive indefinitely
 exec sleep infinity
