@@ -25,57 +25,47 @@ SERVICE_LOG_FILE="${BASE_DIR}/service.log"
 CRON_LOG_FILE="${BASE_DIR}/cron.log"
 EXECUTABLE_NAME="titansys-whatsapp-linux"
 EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
-# URL de descarga por defecto, puede ser sobreescrita por una variable de entorno
 DOWNLOAD_URL="${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}"
 
 # --- Limpiar Logs en Cada Inicio ---
 echo -e "${YELLOW}🧹 Limpiando archivos de log anteriores...${NC}"
 rm -f "${SERVICE_LOG_FILE}" "${CRON_LOG_FILE}" || true
 
-# --- Creación de Comandos de Gestión ---
+# --- Creación de Comandos de Gestión (Método Robusto) ---
 echo -e "${YELLOW}🔧 Creando comandos de gestión...${NC}"
 
-# autostart-wa (Script de vigilancia de cron, ahora usa PID)
+# autostart-wa
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
-cat << 'EOG_AUTO' | tr -d '\r' > "${AUTOSTART_SCRIPT_PATH}"
+cat << 'EOG_AUTO' > /tmp/autostart-wa.tmp
 #!/bin/bash
-# Redirigir toda la salida a un archivo de log
 exec >> ${CRON_LOG_FILE} 2>&1
 echo "---"
 echo "Cron job ejecutado en: $(date)"
-
-# Verificar si el servicio ya está corriendo usando el archivo PID
 if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
   echo "Servicio ya está en ejecución con PID $(cat "${PID_FILE}")."
   exit 0
 fi
-
-# Verificar si el servicio está configurado
 if [ ! -f ${ENV_FILE} ]; then
   echo "Info: Archivo .env no encontrado. El servicio aún no está configurado para ejecutarse."
   exit 0
 fi
-
-# Si el archivo PID quedó obsoleto, eliminarlo
 rm -f "${PID_FILE}"
-
 echo "Servicio no está en ejecución. Intentando iniciar..."
 set -a; source ${ENV_FILE}; set +a
 cd "${BASE_DIR}"
-# Iniciar el proceso en segundo plano con nohup y capturar su PID
 nohup ./${EXECUTABLE_NAME} --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
 PID=$!
-# Guardar el PID en el archivo
 echo "${PID}" > "${PID_FILE}"
 echo "Comando de inicio emitido. Servicio corriendo con PID ${PID}."
 EOG_AUTO
+tr -d '\r' < /tmp/autostart-wa.tmp > "${AUTOSTART_SCRIPT_PATH}"
+rm /tmp/autostart-wa.tmp
 
-# install-wa (Comando de configuración inicial)
-cat << 'EOG' | tr -d '\r' > /usr/local/bin/install-wa
+# install-wa
+cat << 'EOG_INSTALL' > /tmp/install-wa.tmp
 #!/bin/bash
 set -e
 echo "--- Instalación Inicial del Servicio WhatsApp ---"
-# Lógica para crear .env: desde variables de entorno o interactivamente
 if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
     echo "✅ Variables de entorno encontradas. Creando archivo .env automáticamente..."
     {
@@ -87,20 +77,20 @@ elif [ ! -f "${ENV_FILE}" ]; then
     echo "⚠️ No se encontró archivo .env o variables de entorno. Iniciando configuración interactiva..."
     /usr/local/bin/config-wa
 fi
-# Configurar e iniciar cron
 echo "🕒 Configurando e iniciando tarea de cron para reinicio automático..."
 service cron start
 (crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * ${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot ${AUTOSTART_SCRIPT_PATH}") | crontab -
 echo "✅ Tarea de cron configurada."
-# Disparar el primer inicio
 echo "🚀 Disparando inicio del servicio..."
 /usr/local/bin/autostart-wa
 sleep 3
 /usr/local/bin/status-wa
-EOG
+EOG_INSTALL
+tr -d '\r' < /tmp/install-wa.tmp > /usr/local/bin/install-wa
+rm /tmp/install-wa.tmp
 
-# config-wa (Editor interactivo de .env)
-cat << 'EOG' | tr -d '\r' > /usr/local/bin/config-wa
+# config-wa
+cat << 'EOG_CONFIG' > /tmp/config-wa.tmp
 #!/bin/bash
 set -e
 echo "--- Configuración Interactiva de .env ---"
@@ -110,10 +100,12 @@ read -p "Ingresa tu PCODE [actual: ${PCODE}]: " PCODE_INPUT; PCODE=${PCODE_INPUT
 read -p "Ingresa tu KEY [actual: ${KEY}]: " KEY_INPUT; KEY=${KEY_INPUT:-$KEY}
 echo "Creando/actualizando archivo .env..."; { echo "PORT=$PORT"; echo "PCODE=$PCODE"; echo "KEY=$KEY"; } > "${ENV_FILE}"
 echo "✅ Archivo .env actualizado. Por favor, ejecuta 'restart-wa' para aplicar los cambios."
-EOG
+EOG_CONFIG
+tr -d '\r' < /tmp/config-wa.tmp > /usr/local/bin/config-wa
+rm /tmp/config-wa.tmp
 
-# stop-wa (Ahora usa PID para detener el servicio)
-cat << 'EOG' | tr -d '\r' > /usr/local/bin/stop-wa
+# stop-wa
+cat << 'EOG_STOP' > /tmp/stop-wa.tmp
 #!/bin/bash
 echo -e "🛑 Deteniendo el servicio de WhatsApp..."
 if [ ! -f "${PID_FILE}" ]; then
@@ -124,11 +116,7 @@ else
     if ps -p $PID > /dev/null; then
         echo "Deteniendo proceso con PID ${PID}..."
         kill "${PID}"
-        # Esperar a que el proceso termine
-        while kill -0 "${PID}" > /dev/null 2>&1; do
-            echo -n "."
-            sleep 1
-        done
+        while kill -0 "${PID}" > /dev/null 2>&1; do echo -n "."; sleep 1; done
         echo -e "\nProceso detenido."
     else
         echo "El proceso con PID ${PID} no existe. Limpiando archivo PID."
@@ -136,10 +124,12 @@ else
     rm -f "${PID_FILE}"
 fi
 echo "Servicio detenido. La tarea de cron lo reiniciará en un minuto."
-EOG
+EOG_STOP
+tr -d '\r' < /tmp/stop-wa.tmp > /usr/local/bin/stop-wa
+rm /tmp/stop-wa.tmp
 
-# restart-wa (Utiliza los nuevos stop y autostart)
-cat << 'EOG' | tr -d '\r' > /usr/local/bin/restart-wa
+# restart-wa
+cat << 'EOG_RESTART' > /tmp/restart-wa.tmp
 #!/bin/bash
 echo "🔄 Reiniciando el servicio de WhatsApp...";
 /usr/local/bin/stop-wa
@@ -148,10 +138,12 @@ echo "Disparando reinicio inmediato...";
 /usr/local/bin/autostart-wa
 sleep 1
 /usr/local/bin/status-wa
-EOG
+EOG_RESTART
+tr -d '\r' < /tmp/restart-wa.tmp > /usr/local/bin/restart-wa
+rm /tmp/restart-wa.tmp
 
-# update-wa (Utiliza el nuevo stop-wa)
-cat << 'EOG' | tr -d '\r' > /usr/local/bin/update-wa
+# update-wa
+cat << 'EOG_UPDATE' > /tmp/update-wa.tmp
 #!/bin/bash
 set -e
 echo "--- Actualizando Binario del Servicio WhatsApp ---"
@@ -161,10 +153,12 @@ cd "${BASE_DIR}"
 curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
 echo "✅ Actualización completa. Disparando reinicio inmediato...";
 /usr/local/bin/autostart-wa
-EOG
+EOG_UPDATE
+tr -d '\r' < /tmp/update-wa.tmp > /usr/local/bin/update-wa
+rm /tmp/update-wa.tmp
 
-# status-wa (Ahora usa PID para verificar el estado)
-cat << 'EOG' | tr -d '\r' > /usr/local/bin/status-wa
+# status-wa
+cat << 'EOG_STATUS' > /tmp/status-wa.tmp
 #!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
 echo "--- Estado del Servicio WhatsApp ---"
@@ -174,7 +168,9 @@ else
     echo -e "${RED}❌ El servicio está DETENIDO.${NC}"
 fi
 echo -e "Para ver los logs detallados, ejecuta: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
-EOG
+EOG_STATUS
+tr -d '\r' < /tmp/status-wa.tmp > /usr/local/bin/status-wa
+rm /tmp/status-wa.tmp
 
 # Hacer todos los scripts ejecutables
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
@@ -182,10 +178,7 @@ chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart
 echo -e "${GREEN}✅ Todos los comandos de gestión fueron creados exitosamente.${NC}"
 
 # --- Lógica Principal del Entrypoint ---
-# Esta parte solo prepara el entorno y luego espera.
-
 echo -e "${YELLOW}📦 Preparando el entorno...${NC}"
-# Descargar el binario solo si no existe en el volumen
 if [ ! -f "${EXECUTABLE_PATH}" ]; then
   echo "Descargando binario por primera vez desde ${DOWNLOAD_URL}..."
   cd "${BASE_DIR}" && curl -sSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
