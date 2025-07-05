@@ -1,10 +1,4 @@
 #!/bin/bash
-# -----------------------------------------------------------------------------
-# Main Entrypoint Script for WhatsApp Server
-#
-# Author: @RenatoAscencio
-# Repository: https://github.com/RenatoAscencio/zender-wa
-# -----------------------------------------------------------------------------
 set -e
 
 # --- Environment and File Definitions ---
@@ -14,14 +8,28 @@ EXECUTABLE_NAME="titansys-whatsapp-linux"
 EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
 DOWNLOAD_URL="https://raw.anycdn.link/wa/linux.zip"
 
+# --- Force Command Refresh on Every Start ---
+# This ensures that on every redeploy, the latest versions of the scripts are installed.
+echo "🔄 Refreshing management commands..."
+rm -f /usr/local/bin/install-wa \
+      /usr/local/bin/config-wa \
+      /usr/local/bin/stop-wa \
+      /usr/local/bin/restart-wa \
+      /usr/local/bin/update-wa \
+      /usr/local/bin/autostart-wa
+
 # --- Main Logic: Check for environment variables first ---
 
 if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
   # --- MODE 1: Automated Deployment (Environment variables are set) ---
   echo "✅ Environment variables for PCODE and KEY found. Configuring service..."
+
+  # For debugging, print the received variables to the log
   echo "   - PCODE received: $PCODE"
   echo "   - KEY received:   $KEY"
   echo "   - PORT set to:    ${PORT:-443}"
+
+  # Create/overwrite the .env file using the environment variables.
   echo "✍️  Creating/updating .env file from environment variables..."
   {
     echo "PORT=${PORT:-443}"
@@ -95,8 +103,24 @@ echo "Starting WhatsApp service..."; set -a; source "${ENV_FILE}"; set +a
 cd "${BASE_DIR}" && ./"${EXECUTABLE_NAME}" --pcode="\$PCODE" --key="\$KEY" --host="0.0.0.0" --port="\$PORT" &
 echo "✅ Service started in the background. Run 'restart-wa' to apply cron."
 EOG
-  chmod +x /usr/local/bin/install-wa /usr/local/bin/config-wa
-  # (Other commands are created below)
+  cat << EOG > /usr/local/bin/stop-wa
+#!/bin/bash
+echo "🛑 Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped."
+EOG
+  cat << EOG > /usr/local/bin/restart-wa
+#!/bin/bash
+echo "🔄 Restarting the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
+echo "Service stopped. The cron job will restart it automatically."
+EOG
+  cat << EOG > /usr/local/bin/update-wa
+#!/bin/bash
+set -e
+echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
+echo "Downloading latest binary..."; cd "${BASE_DIR}"
+curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+echo "✅ Update complete. Service will be restarted by cron."
+EOG
+  chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa
 
   # Download binary if it doesn't exist
   if [ ! -f "$EXECUTABLE_PATH" ]; then
@@ -114,11 +138,7 @@ EOG
   echo "   2. Run the command: install-wa"
   echo ""
   echo "Available Commands:"
-  echo "   - install-wa : Performs the first-time setup."
-  echo "   - config-wa  : Edits the .env variables interactively."
-  echo "   - update-wa  : Downloads the latest version of the binary."
-  echo "   - restart-wa : Restarts the service."
-  echo "   - stop-wa    : Stops the service."
+  echo "   - install-wa, config-wa, update-wa, restart-wa, stop-wa"
   echo "--------------------------------------------------------"
   exec sleep infinity
 fi
