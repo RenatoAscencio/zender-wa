@@ -1,0 +1,21 @@
+name: Publicar Imagen de Docker
+on:
+  push:
+    branches: [ "main" ]
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar Repositorio
+        uses: actions/checkout@v4
+      - name: Iniciar Sesión en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Construir y Subir Imagen
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/zender-wa:latest
