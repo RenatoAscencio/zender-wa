@@ -127,7 +127,7 @@ echo "🕒 Configuring and starting cron job for auto-restart..."
 service cron start
 echo "Waiting for cron service to be ready..."
 sleep 5
-( crontab -l 2>/dev/null; echo "@reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"; echo "* * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1" ) | crontab -
+(crontab -l 2>/dev/null | { grep -Fxq "@reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1" || echo "@reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"; grep -Fxq "* * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1" || echo "* * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"; }) | crontab -
 echo "✅ Cron job configured. Waiting a moment..."
 sleep 5
 echo "🚀 Triggering service start..."
