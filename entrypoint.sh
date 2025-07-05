@@ -30,9 +30,10 @@ DOWNLOAD_URL="https://raw.anycdn.link/wa/linux.zip"
 echo -e "${YELLOW}🧹 Clearing previous log files...${NC}"
 rm -f "${SERVICE_LOG_FILE}" "${CRON_LOG_FILE}" || true
 
-# --- Always-on Services and Commands ---
-echo -e "${YELLOW}🕒 Starting and configuring cron daemon...${NC}"
-service cron start
+# --- Management Commands Creation ---
+# This section creates all necessary helper scripts inside the container.
+
+# autostart-wa (The cron watchdog script)
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 cat << EOG_AUTO > "\$AUTOSTART_SCRIPT_PATH"
 #!/bin/bash
@@ -52,15 +53,13 @@ else
   echo "Service is already running."
 fi
 EOG_AUTO
-chmod +x "\$AUTOSTART_SCRIPT_PATH"
-(crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * \${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot \${AUTOSTART_SCRIPT_PATH}") | crontab -
-echo -e "${GREEN}✅ Cron job for auto-restart is active.${NC}"
 
-# --- Management Commands Creation ---
+# install-wa (The main setup and first-run command)
 cat << EOG > /usr/local/bin/install-wa
 #!/bin/bash
 set -e
 echo "--- WhatsApp Service Initial Installation ---"
+# Logic to create .env: either from environment variables or interactively
 if [ -n "\$PCODE" ] && [ -n "\$KEY" ]; then
     echo "✅ Environment variables found. Creating .env file automatically..."
     {
@@ -72,11 +71,19 @@ elif [ ! -f "${ENV_FILE}" ]; then
     echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
     /usr/local/bin/config-wa
 fi
+# Configure and start cron
+echo "🕒 Configuring and starting cron job for auto-restart..."
+service cron start
+(crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * ${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot ${AUTOSTART_SCRIPT_PATH}") | crontab -
+echo "✅ Cron job configured."
+# Trigger the first start
 echo "🚀 Triggering service start..."
 /usr/local/bin/autostart-wa
 sleep 3
 /usr/local/bin/status-wa
 EOG
+
+# config-wa (Interactive .env editor)
 cat << EOG > /usr/local/bin/config-wa
 #!/bin/bash
 set -e
@@ -88,10 +95,14 @@ read -p "Enter your KEY [current: \${KEY}]: " KEY_INPUT; KEY=\${KEY_INPUT:-\$KEY
 echo "Creating/updating .env file..."; { echo "PORT=\$PORT"; echo "PCODE=\$PCODE"; echo "KEY=\$KEY"; } > "${ENV_FILE}"
 echo "✅ .env file updated. Please run 'restart-wa' to apply the changes."
 EOG
+
+# stop-wa
 cat << EOG > /usr/local/bin/stop-wa
 #!/bin/bash
 echo "🛑 Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped. The cron job will restart it within a minute."
 EOG
+
+# restart-wa
 cat << EOG > /usr/local/bin/restart-wa
 #!/bin/bash
 echo "🔄 Restarting the WhatsApp service...";
@@ -102,6 +113,8 @@ echo "Service stopped. Triggering immediate restart...";
 sleep 3
 /usr/local/bin/status-wa
 EOG
+
+# update-wa
 cat << EOG > /usr/local/bin/update-wa
 #!/bin/bash
 set -e
@@ -111,6 +124,8 @@ curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip 
 echo "✅ Update complete. Triggering immediate restart...";
 /usr/local/bin/autostart-wa
 EOG
+
+# status-wa
 cat << EOG > /usr/local/bin/status-wa
 #!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
@@ -122,37 +137,36 @@ else
 fi
 echo -e "To see detailed logs, run: \${YELLOW}tail -f ${SERVICE_LOG_FILE}\${NC}"
 EOG
-chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa
+
+# Make all scripts executable
+chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
 
 # --- Main Entrypoint Logic ---
+# This part only prepares the environment and then waits.
+
+echo -e "${YELLOW}📦 Preparing environment...${NC}"
 # Download binary only if it doesn't exist in the volume
 if [ ! -f "$EXECUTABLE_PATH" ]; then
-  echo -e "${YELLOW}📦 Binary not found. Performing first-time download...${NC}"
+  echo "Downloading binary for the first time..."
   cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
 fi
 
-# Check if the service should be started automatically or wait for manual setup
-if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
-  echo -e "${GREEN}✅ Environment variables detected. Running automatic installation...${NC}"
-  /usr/local/bin/install-wa
-else
-  echo -e "\n${CYAN}--------------------------------------------------------${NC}"
-  echo -e "${RED}🔴 ACTION REQUIRED: Service is not configured.${NC}"
-  echo -e "${CYAN}--------------------------------------------------------${NC}"
-  echo "The container is now in standby mode."
-  echo ""
-  echo -e "   1. Open the console for this container."
-  echo -e "   2. Run the command: ${GREEN}install-wa${NC}"
-  echo ""
-  echo -e "${CYAN}Available Commands:${NC}"
-  echo -e "   - ${GREEN}install-wa${NC} : Performs the first-time setup."
-  echo -e "   - ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
-  echo -e "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
-  echo -e "   - ${GREEN}restart-wa${NC} : Restarts the service."
-  echo -e "   - ${GREEN}stop-wa${NC}    : Stops the service."
-  echo -e "   - ${GREEN}status-wa${NC}  : Checks the current status of the service."
-  echo -e "${CYAN}--------------------------------------------------------${NC}"
-fi
+echo -e "\n${CYAN}--------------------------------------------------------${NC}"
+echo -e "${RED}🔴 ACTION REQUIRED: Environment is ready for setup.${NC}"
+echo -e "${CYAN}--------------------------------------------------------${NC}"
+echo "The container is now in standby mode."
+echo ""
+echo -e "   1. Open the console for this container."
+echo -e "   2. Run the command: ${GREEN}install-wa${NC}"
+echo ""
+echo -e "${CYAN}Available Commands:${NC}"
+echo -e "   - ${GREEN}install-wa${NC} : Performs the first-time setup."
+echo -e "   - ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
+echo -e "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
+echo -e "   - ${GREEN}restart-wa${NC} : Restarts the service."
+echo -e "   - ${GREEN}stop-wa${NC}    : Stops the service."
+echo -e "   - ${GREEN}status-wa${NC}  : Checks the current status of the service."
+echo -e "${CYAN}--------------------------------------------------------${NC}"
 
 # Keep the container alive indefinitely
 exec sleep infinity
