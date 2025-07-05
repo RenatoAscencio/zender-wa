@@ -1,14 +1,19 @@
 #!/bin/bash
 set -e
 
+# --- Color Definitions ---
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
 # --- Display Build Information on Every Start ---
-echo ""
-echo "--------------------------------------------------------"
-echo "🚀 Starting WhatsApp Server Container"
-echo "   Version:    ${VERSION:-unknown}"
-echo "   Build Date: ${BUILD_DATE:-not specified}"
-echo "--------------------------------------------------------"
-echo ""
+echo -e "\n${CYAN}--------------------------------------------------------${NC}"
+echo -e "${CYAN}🚀 Starting WhatsApp Server Container${NC}"
+echo -e "${CYAN}   Version:    ${VERSION:-unknown}${NC}"
+echo -e "${CYAN}   Build Date: ${BUILD_DATE:-not specified}${NC}"
+echo -e "${CYAN}--------------------------------------------------------${NC}\n"
 
 # --- Environment and File Definitions ---
 BASE_DIR="/data/whatsapp-server"
@@ -18,7 +23,7 @@ EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
 DOWNLOAD_URL="https://raw.anycdn.link/wa/linux.zip"
 
 # --- Always-on Services and Commands ---
-echo "🕒 Starting cron daemon..."
+echo -e "${YELLOW}🕒 Starting cron daemon...${NC}"
 service cron start
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 cat << EOG_AUTO > "\$AUTOSTART_SCRIPT_PATH"
@@ -41,29 +46,33 @@ fi
 EOG_AUTO
 chmod +x "\$AUTOSTART_SCRIPT_PATH"
 (crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * \${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot \${AUTOSTART_SCRIPT_PATH}") | crontab -
-echo "✅ Cron job for auto-restart is active."
+echo -e "${GREEN}✅ Cron job for auto-restart is active.${NC}"
 
 # --- Management Commands Creation ---
 # (install-wa, config-wa, stop-wa, restart-wa, update-wa are created here)
 # ... (El resto de la creación de comandos sigue igual)
 
 # --- Main Entrypoint Logic ---
-echo "📦 Preparing environment..."
+echo -e "${YELLOW}📦 Preparing environment...${NC}"
 if [ ! -f "$EXECUTABLE_PATH" ]; then
   echo "Downloading binary for the first time..."
   cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
 fi
 
-echo "--------------------------------------------------------"
-echo "🔴 ACTION REQUIRED: Environment is ready for setup."
-echo "--------------------------------------------------------"
+echo -e "\n${CYAN}--------------------------------------------------------${NC}"
+echo -e "${RED}🔴 ACTION REQUIRED: Environment is ready for setup.${NC}"
+echo -e "${CYAN}--------------------------------------------------------${NC}"
 echo "The container is now in standby mode. The cron watchdog is active."
 echo ""
 echo "   1. Open the console for this container."
-echo "   2. Run the command: install-wa"
+echo "   2. Run the command: ${GREEN}install-wa${NC}"
 echo ""
-echo "Available Commands:"
-echo "   - install-wa, config-wa, update-wa, restart-wa, stop-wa"
-echo "--------------------------------------------------------"
+echo -e "${CYAN}Available Commands:${NC}"
+echo "   - ${GREEN}install-wa${NC} : Performs the first-time setup or starts the service."
+echo "   - ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
+echo "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
+echo "   - ${GREEN}restart-wa${NC} : Restarts the service."
+echo "   - ${GREEN}stop-wa${NC}    : Stops the service."
+echo -e "${CYAN}--------------------------------------------------------${NC}"
 
 exec sleep infinity
