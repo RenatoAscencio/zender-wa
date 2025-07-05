@@ -35,7 +35,7 @@ echo -e "${YELLOW}🔧 Creating management commands...${NC}"
 
 # autostart-wa (The cron watchdog script)
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
-cat << EOG_AUTO > "${AUTOSTART_SCRIPT_PATH}"
+cat << 'EOG_AUTO' > "${AUTOSTART_SCRIPT_PATH}"
 #!/bin/bash
 exec >> ${CRON_LOG_FILE} 2>&1
 echo "---"
@@ -47,7 +47,7 @@ fi
 set -a; source ${ENV_FILE}; set +a
 if ! /usr/bin/pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
   echo "Service not running. Attempting to start..."
-  cd "${BASE_DIR}" && ./"${EXECUTABLE_NAME}" --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
+  cd "${BASE_DIR}" && ./${EXECUTABLE_NAME} --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
   echo "Start command issued."
 else
   echo "Service is already running."
@@ -55,7 +55,7 @@ fi
 EOG_AUTO
 
 # install-wa (The main setup and first-run command)
-cat << EOG > /usr/local/bin/install-wa
+cat << 'EOG' > /usr/local/bin/install-wa
 #!/bin/bash
 set -e
 echo "--- WhatsApp Service Initial Installation ---"
@@ -84,7 +84,7 @@ sleep 3
 EOG
 
 # config-wa (Interactive .env editor)
-cat << EOG > /usr/local/bin/config-wa
+cat << 'EOG' > /usr/local/bin/config-wa
 #!/bin/bash
 set -e
 echo "--- Interactive .env Configuration ---"
@@ -97,13 +97,13 @@ echo "✅ .env file updated. Please run 'restart-wa' to apply the changes."
 EOG
 
 # stop-wa
-cat << EOG > /usr/local/bin/stop-wa
+cat << 'EOG' > /usr/local/bin/stop-wa
 #!/bin/bash
 echo "🛑 Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped. The cron job will restart it within a minute."
 EOG
 
 # restart-wa
-cat << EOG > /usr/local/bin/restart-wa
+cat << 'EOG' > /usr/local/bin/restart-wa
 #!/bin/bash
 echo "🔄 Restarting the WhatsApp service...";
 pkill -f "${EXECUTABLE_NAME}" || true;
@@ -115,7 +115,7 @@ sleep 3
 EOG
 
 # update-wa
-cat << EOG > /usr/local/bin/update-wa
+cat << 'EOG' > /usr/local/bin/update-wa
 #!/bin/bash
 set -e
 echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
@@ -126,7 +126,7 @@ echo "✅ Update complete. Triggering immediate restart...";
 EOG
 
 # status-wa
-cat << EOG > "/usr/local/bin/status-wa"
+cat << 'EOG' > /usr/local/bin/status-wa
 #!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
 echo "--- WhatsApp Service Status ---"
