@@ -184,23 +184,19 @@ if [ ! -f "/data/whatsapp-server/titansys-whatsapp-linux" ]; then
   chmod +x "titansys-whatsapp-linux"
 fi
 
-cat << EOG_MSG
+# --- Mensaje de acción requerida con diseño ---
+echo -e "\n${CYAN}--------------------------------------------------------${NC}"
+echo -e "${RED}🔴 ACTION REQUIRED:${NC} Please run ${GREEN}install-wa${NC}"
+echo -e "${CYAN}--------------------------------------------------------${NC}\n"
+echo "1) docker exec -it <container> bash"
+echo "2) install-wa"
 
-${CYAN}--------------------------------------------------------${NC}
-${RED}🔴 ACTION REQUIRED:${NC} Please run ${GREEN}install-wa${NC}
-${CYAN}--------------------------------------------------------${NC}
-
-1) docker exec -it <container> bash
-2) install-wa
-
-Available commands:
-  • install-wa
-  • config-wa
-  • update-wa
-  • restart-wa
-  • stop-wa
-  • status-wa
-
-EOG_MSG
+echo "Available commands:"  
+echo "  • install-wa"  
+echo "  • config-wa"  
+echo "  • update-wa"  
+echo "  • restart-wa"  
+echo "  • stop-wa"  
+echo "  • status-wa"
 
 exec sleep infinity
