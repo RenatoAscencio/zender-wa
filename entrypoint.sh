@@ -1,174 +1,212 @@
 #!/bin/bash
 set -e
 
-# --- Color Definitions ---
+# --- Definiciones de Colores ---
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m' # Sin Color
 
-# --- Display Build Information on Every Start ---
+# --- Mostrar InformaciÛn de Build al Iniciar ---
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
-echo -e "${CYAN}üöÄ Starting WhatsApp Server Container${NC}"
-echo -e "${CYAN}   Version:    ${VERSION:-unknown}${NC}"
-echo -e "${CYAN}   Build Date: ${BUILD_DATE:-not specified}${NC}"
-echo -e "${CYAN}   Author:     @RenatoAscencio${NC}"
-echo -e "${CYAN}   Repository: https://github.com/RenatoAscencio/zender-wa${NC}"
+echo -e "${CYAN}? Iniciando Contenedor del Servidor WhatsApp${NC}"
+echo -e "${CYAN}   VersiÛn:    ${VERSION:-unknown}${NC}"
+echo -e "${CYAN}   Fecha Build: ${BUILD_DATE:-not specified}${NC}"
+echo -e "${CYAN}   Autor:      @RenatoAscencio${NC}"
+echo -e "${CYAN}   Repositorio: https://github.com/RenatoAscencio/zender-wa${NC}"
 echo -e "${CYAN}--------------------------------------------------------${NC}\n"
 
-# --- Environment and File Definitions ---
+# --- Definiciones de Entorno y Archivos ---
 BASE_DIR="/data/whatsapp-server"
 ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid" # Archivo para guardar el Process ID
 SERVICE_LOG_FILE="${BASE_DIR}/service.log"
 CRON_LOG_FILE="${BASE_DIR}/cron.log"
 EXECUTABLE_NAME="titansys-whatsapp-linux"
 EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
-DOWNLOAD_URL="https://raw.anycdn.link/wa/linux.zip"
+# URL de descarga por defecto, puede ser sobreescrita por una variable de entorno
+DOWNLOAD_URL="${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}"
 
-# --- Clean Up Logs on Every Start ---
-echo -e "${YELLOW}üßπ Clearing previous log files...${NC}"
+# --- Limpiar Logs en Cada Inicio ---
+echo -e "${YELLOW}? Limpiando archivos de log anteriores...${NC}"
 rm -f "${SERVICE_LOG_FILE}" "${CRON_LOG_FILE}" || true
 
-# --- Management Commands Creation ---
-echo -e "${YELLOW}üîß Creating management commands...${NC}"
+# --- CreaciÛn de Comandos de GestiÛn ---
+echo -e "${YELLOW}? Creando comandos de gestiÛn...${NC}"
 
-# autostart-wa (The cron watchdog script)
+# autostart-wa (Script de vigilancia de cron, ahora usa PID)
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 cat << 'EOG_AUTO' > "${AUTOSTART_SCRIPT_PATH}"
 #!/bin/bash
+# Redirigir toda la salida a un archivo de log
 exec >> ${CRON_LOG_FILE} 2>&1
 echo "---"
-echo "Cron job ran at: $(date)"
-if [ ! -f ${ENV_FILE} ]; then
-  echo "Info: .env file not found. Service is not configured to run yet."
+echo "Cron job ejecutado en: $(date)"
+
+# Verificar si el servicio ya est· corriendo usando el archivo PID
+if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
+  echo "Servicio ya est· en ejecuciÛn con PID $(cat "${PID_FILE}")."
   exit 0
 fi
-set -a; source ${ENV_FILE}; set +a
-if ! /usr/bin/pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
-  echo "Service not running. Attempting to start..."
-  cd "${BASE_DIR}" && ./${EXECUTABLE_NAME} --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
-  echo "Start command issued."
-else
-  echo "Service is already running."
+
+# Verificar si el servicio est· configurado
+if [ ! -f ${ENV_FILE} ]; then
+  echo "Info: Archivo .env no encontrado. El servicio a˙n no est· configurado para ejecutarse."
+  exit 0
 fi
+
+# Si el archivo PID quedÛ obsoleto, eliminarlo
+rm -f "${PID_FILE}"
+
+echo "Servicio no est· en ejecuciÛn. Intentando iniciar..."
+set -a; source ${ENV_FILE}; set +a
+cd "${BASE_DIR}"
+# Iniciar el proceso en segundo plano con nohup y capturar su PID
+nohup ./${EXECUTABLE_NAME} --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
+PID=$!
+# Guardar el PID en el archivo
+echo "${PID}" > "${PID_FILE}"
+echo "Comando de inicio emitido. Servicio corriendo con PID ${PID}."
 EOG_AUTO
 
-# install-wa (The main setup and first-run command)
+# install-wa (Comando de configuraciÛn inicial)
 cat << 'EOG' > /usr/local/bin/install-wa
 #!/bin/bash
 set -e
-echo "--- WhatsApp Service Initial Installation ---"
-# Logic to create .env: either from environment variables or interactively
+echo "--- InstalaciÛn Inicial del Servicio WhatsApp ---"
+# LÛgica para crear .env: desde variables de entorno o interactivamente
 if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
-    echo "‚úÖ Environment variables found. Creating .env file automatically..."
+    echo "? Variables de entorno encontradas. Creando archivo .env autom·ticamente..."
     {
         echo "PORT=${PORT:-443}"
         echo "PCODE=$PCODE"
         echo "KEY=$KEY"
     } > "${ENV_FILE}"
 elif [ ! -f "${ENV_FILE}" ]; then
-    echo "‚ö†Ô∏è No .env file or environment variables found. Starting interactive setup..."
+    echo "?? No se encontrÛ archivo .env o variables de entorno. Iniciando configuraciÛn interactiva..."
     /usr/local/bin/config-wa
 fi
-# Configure and start cron
-echo "üïí Configuring and starting cron job for auto-restart..."
+# Configurar e iniciar cron
+echo "? Configurando e iniciando tarea de cron para reinicio autom·tico..."
 service cron start
 (crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * ${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot ${AUTOSTART_SCRIPT_PATH}") | crontab -
-echo "‚úÖ Cron job configured."
-# Trigger the first start
-echo "üöÄ Triggering service start..."
+echo "? Tarea de cron configurada."
+# Disparar el primer inicio
+echo "? Disparando inicio del servicio..."
 /usr/local/bin/autostart-wa
 sleep 3
 /usr/local/bin/status-wa
 EOG
 
-# config-wa (Interactive .env editor)
+# config-wa (Editor interactivo de .env)
 cat << 'EOG' > /usr/local/bin/config-wa
 #!/bin/bash
 set -e
-echo "--- Interactive .env Configuration ---"
+echo "--- ConfiguraciÛn Interactiva de .env ---"
 if [ -f "${ENV_FILE}" ]; then set -a; source "${ENV_FILE}"; set +a; fi
-read -p "Enter PORT [current: ${PORT:-443}]: " PORT_INPUT; PORT=${PORT_INPUT:-$PORT}
-read -p "Enter your PCODE [current: ${PCODE}]: " PCODE_INPUT; PCODE=${PCODE_INPUT:-$PCODE}
-read -p "Enter your KEY [current: ${KEY}]: " KEY_INPUT; KEY=${KEY_INPUT:-$KEY}
-echo "Creating/updating .env file..."; { echo "PORT=$PORT"; echo "PCODE=$PCODE"; echo "KEY=$KEY"; } > "${ENV_FILE}"
-echo "‚úÖ .env file updated. Please run 'restart-wa' to apply the changes."
+read -p "Ingresa el PUERTO [actual: ${PORT:-443}]: " PORT_INPUT; PORT=${PORT_INPUT:-$PORT}
+read -p "Ingresa tu PCODE [actual: ${PCODE}]: " PCODE_INPUT; PCODE=${PCODE_INPUT:-$PCODE}
+read -p "Ingresa tu KEY [actual: ${KEY}]: " KEY_INPUT; KEY=${KEY_INPUT:-$KEY}
+echo "Creando/actualizando archivo .env..."; { echo "PORT=$PORT"; echo "PCODE=$PCODE"; echo "KEY=$KEY"; } > "${ENV_FILE}"
+echo "? Archivo .env actualizado. Por favor, ejecuta 'restart-wa' para aplicar los cambios."
 EOG
 
-# stop-wa
+# stop-wa (Ahora usa PID para detener el servicio)
 cat << 'EOG' > /usr/local/bin/stop-wa
 #!/bin/bash
-echo "üõë Stopping the WhatsApp service..."; pkill -f "${EXECUTABLE_NAME}" || true; echo "Service stopped. The cron job will restart it within a minute."
+echo -e "? Deteniendo el servicio de WhatsApp..."
+if [ ! -f "${PID_FILE}" ]; then
+    echo "Archivo PID no encontrado. øEst· el servicio en ejecuciÛn? Intentando detener por nombre como alternativa."
+    pkill -f "${EXECUTABLE_NAME}" || true
+else
+    PID=$(cat "${PID_FILE}")
+    if ps -p $PID > /dev/null; then
+        echo "Deteniendo proceso con PID ${PID}..."
+        kill "${PID}"
+        # Esperar a que el proceso termine
+        while kill -0 "${PID}" > /dev/null 2>&1; do
+            echo -n "."
+            sleep 1
+        done
+        echo -e "\nProceso detenido."
+    else
+        echo "El proceso con PID ${PID} no existe. Limpiando archivo PID."
+    fi
+    rm -f "${PID_FILE}"
+fi
+echo "Servicio detenido. La tarea de cron lo reiniciar· en un minuto."
 EOG
 
-# restart-wa
+# restart-wa (Utiliza los nuevos stop y autostart)
 cat << 'EOG' > /usr/local/bin/restart-wa
 #!/bin/bash
-echo "üîÑ Restarting the WhatsApp service...";
-pkill -f "${EXECUTABLE_NAME}" || true;
+echo "? Reiniciando el servicio de WhatsApp...";
+/usr/local/bin/stop-wa
 sleep 2;
-echo "Service stopped. Triggering immediate restart...";
+echo "Disparando reinicio inmediato...";
 /usr/local/bin/autostart-wa
-sleep 3
+sleep 1
 /usr/local/bin/status-wa
 EOG
 
-# update-wa
+# update-wa (Utiliza el nuevo stop-wa)
 cat << 'EOG' > /usr/local/bin/update-wa
 #!/bin/bash
 set -e
-echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
-echo "Downloading latest binary..."; cd "${BASE_DIR}"
+echo "--- Actualizando Binario del Servicio WhatsApp ---"
+/usr/local/bin/stop-wa
+echo "Descargando el ˙ltimo binario desde ${DOWNLOAD_URL}..."
+cd "${BASE_DIR}"
 curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
-echo "‚úÖ Update complete. Triggering immediate restart...";
+echo "? ActualizaciÛn completa. Disparando reinicio inmediato...";
 /usr/local/bin/autostart-wa
 EOG
 
-# status-wa
+# status-wa (Ahora usa PID para verificar el estado)
 cat << 'EOG' > /usr/local/bin/status-wa
 #!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
-echo "--- WhatsApp Service Status ---"
-if pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
-    echo -e "${GREEN}‚úÖ Service is RUNNING.${NC}"
+echo "--- Estado del Servicio WhatsApp ---"
+if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
+    echo -e "${GREEN}? El servicio est· CORRIENDO${NC} con PID $(cat "${PID_FILE}")."
 else
-    echo -e "${RED}‚ùå Service is STOPPED.${NC}"
+    echo -e "${RED}? El servicio est· DETENIDO.${NC}"
 fi
-echo -e "To see detailed logs, run: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
+echo -e "Para ver los logs detallados, ejecuta: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
 EOG
 
-# Make all scripts executable
+# Hacer todos los scripts ejecutables
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
 
-echo -e "${GREEN}‚úÖ All management commands created successfully.${NC}"
+echo -e "${GREEN}? Todos los comandos de gestiÛn fueron creados exitosamente.${NC}"
 
-# --- Main Entrypoint Logic ---
-# This part only prepares the environment and then waits.
+# --- LÛgica Principal del Entrypoint ---
+# Esta parte solo prepara el entorno y luego espera.
 
-echo -e "${YELLOW}üì¶ Preparing environment...${NC}"
-# Download binary only if it doesn't exist in the volume
+echo -e "${YELLOW}? Preparando el entorno...${NC}"
+# Descargar el binario solo si no existe en el volumen
 if [ ! -f "${EXECUTABLE_PATH}" ]; then
-  echo "Downloading binary for the first time..."
+  echo "Descargando binario por primera vez desde ${DOWNLOAD_URL}..."
   cd "${BASE_DIR}" && curl -sSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
 fi
 
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
-echo -e "${RED}üî¥ ACTION REQUIRED: Environment is ready for setup.${NC}"
+echo -e "${RED}? ACCI”N REQUERIDA: El entorno est· listo para la configuraciÛn.${NC}"
 echo -e "${CYAN}--------------------------------------------------------${NC}"
-echo "The container is now in standby mode."
+echo "El contenedor est· ahora en modo de espera."
 echo ""
-echo -e "   1. Open the console for this container."
-echo -e "   2. Run the command: ${GREEN}install-wa${NC}"
+echo -e "   1. Abre una consola para este contenedor."
+echo -e "   2. Ejecuta el comando: ${GREEN}install-wa${NC}"
 echo ""
-echo -e "${CYAN}Available Commands:${NC}"
-echo -e "   - ${GREEN}install-wa${NC} : Performs the first-time setup."
-echo -e "   - ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
-echo -e "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
-echo -e "   - ${GREEN}restart-wa${NC} : Restarts the service."
-echo -e "   - ${GREEN}stop-wa${NC}    : Stops the service."
-echo -e "   - ${GREEN}status-wa${NC}  : Checks the current status of the service."
+echo -e "${CYAN}Comandos Disponibles:${NC}"
+echo -e "   - ${GREEN}install-wa${NC} : Realiza la configuraciÛn inicial."
+echo -e "   - ${GREEN}config-wa${NC}  : Edita las variables de .env interactivamente."
+echo -e "   - ${GREEN}update-wa${NC}  : Descarga la ˙ltima versiÛn del binario."
+echo -e "   - ${GREEN}restart-wa${NC} : Reinicia el servicio."
+echo -e "   - ${GREEN}stop-wa${NC}    : Detiene el servicio."
+echo -e "   - ${GREEN}status-wa${NC}  : Verifica el estado actual del servicio."
 echo -e "${CYAN}--------------------------------------------------------${NC}"
 
-# Keep the container alive indefinitely
+# Mantener el contenedor vivo indefinidamente
 exec sleep infinity
