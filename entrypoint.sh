@@ -120,7 +120,7 @@ cat << EOG > /usr/local/bin/update-wa
 set -e
 echo "--- Updating WhatsApp Service Binary ---"; pkill -f "${EXECUTABLE_NAME}" || true; sleep 2
 echo "Downloading latest binary..."; cd "${BASE_DIR}"
-curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
 echo "✅ Update complete. Triggering immediate restart...";
 /usr/local/bin/autostart-wa
 EOG
@@ -149,7 +149,7 @@ echo -e "${YELLOW}📦 Preparing environment...${NC}"
 # Download binary only if it doesn't exist in the volume
 if [ ! -f "$EXECUTABLE_PATH" ]; then
   echo "Downloading binary for the first time..."
-  cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
+  cd "$BASE_DIR" && curl -sSL "$DOWNLOAD_URL" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
 fi
 
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
