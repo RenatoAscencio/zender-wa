@@ -115,33 +115,39 @@ EOG
 chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa
 
 # --- Main Entrypoint Logic ---
+# This part only prepares the environment and then waits.
+
+echo -e "${YELLOW}📦 Preparing environment...${NC}"
+# Download binary only if it doesn't exist in the volume
 if [ ! -f "$EXECUTABLE_PATH" ]; then
-  echo -e "${YELLOW}📦 Binary not found. Performing first-time download...${NC}"
+  echo "Downloading binary for the first time..."
+  # This is the corrected line. The variable will now expand correctly.
   cd "$BASE_DIR" && curl -fsSL "$DOWNLOAD_URL" -o linux.zip && unzip -o linux.zip && rm linux.zip && chmod +x "$EXECUTABLE_NAME"
 fi
 
-if [ -f "$ENV_FILE" ]; then
-  echo -e "${GREEN}✅ Configuration file found. Starting service in the background...${NC}"
-  autostart-wa
-  sleep 3
-  status-wa
+# Check if the service is already installed and running
+if pgrep -f "$EXECUTABLE_NAME" > /dev/null; then
+    echo -e "${GREEN}✅ Service is already running in the background.${NC}"
+    status-wa
 else
-  echo -e "\n${CYAN}--------------------------------------------------------${NC}"
-  echo -e "${RED}🔴 ACTION REQUIRED: Service is not configured.${NC}"
-  echo -e "${CYAN}--------------------------------------------------------${NC}"
-  echo "The container is now in standby mode."
-  echo ""
-  echo -e "   1. Open the console for this container."
-  echo -e "   2. Run the command: ${GREEN}install-wa${NC}"
-  echo ""
-  echo -e "${CYAN}Available Commands:${NC}"
-  echo -e "   - ${GREEN}install-wa${NC} : Performs the first-time setup."
-  echo -e "   - ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
-  echo -e "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
-  echo -e "   - ${GREEN}restart-wa${NC} : Restarts the service."
-  echo -e "   - ${GREEN}stop-wa${NC}    : Stops the service."
-  echo -e "   - ${GREEN}status-wa${NC}  : Checks the current status of the service."
-  echo -e "${CYAN}--------------------------------------------------------${NC}"
+    # If not configured or running, go into standby mode
+    echo -e "\n${CYAN}--------------------------------------------------------${NC}"
+    echo -e "${RED}🔴 ACTION REQUIRED: Service is not running.${NC}"
+    echo -e "${CYAN}--------------------------------------------------------${NC}"
+    echo "The container is now in standby mode."
+    echo ""
+    echo -e "   1. Open the console for this container."
+    echo -e "   2. Run the command: ${GREEN}install-wa${NC}"
+    echo ""
+    echo -e "${CYAN}Available Commands:${NC}"
+    echo -e "   - ${GREEN}install-wa${NC} : Performs the first-time setup or starts the service."
+    echo -e "   - ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
+    echo -e "   - ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
+    echo -e "   - ${GREEN}restart-wa${NC} : Restarts the service."
+    echo -e "   - ${GREEN}stop-wa${NC}    : Stops the service."
+    echo -e "   - ${GREEN}status-wa${NC}  : Checks the current status of the service."
+    echo -e "${CYAN}--------------------------------------------------------${NC}"
 fi
 
+# Keep the container alive indefinitely
 exec sleep infinity
