@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -o pipefail
 
 # --- Color Definitions ---
 GREEN='\033[0;32m'
@@ -38,6 +39,13 @@ echo -e "${YELLOW}🔧 Creating management commands...${NC}"
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 cat << 'EOG_AUTO' > /tmp/autostart-wa.tmp
 #!/bin/bash
+# --- Shared Paths ---
+BASE_DIR="/data/whatsapp-server"
+ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid"
+SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+CRON_LOG_FILE="${BASE_DIR}/cron.log"
+EXECUTABLE_NAME="titansys-whatsapp-linux"
 exec >> ${CRON_LOG_FILE} 2>&1
 echo "---"
 echo "Cron job ran at: $(date)"
@@ -45,13 +53,13 @@ if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
   echo "Service is already running with PID $(cat "${PID_FILE}")."
   exit 0
 fi
-if [ ! -f ${ENV_FILE} ]; then
+if [ ! -f "${ENV_FILE}" ]; then
   echo "Info: .env file not found. Service is not configured to run yet."
   exit 0
 fi
 rm -f "${PID_FILE}"
 echo "Service not running. Attempting to start..."
-set -a; source ${ENV_FILE}; set +a
+set -a; source "${ENV_FILE}"; set +a
 cd "${BASE_DIR}"
 nohup ./${EXECUTABLE_NAME} --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
 PID=$!
@@ -64,6 +72,14 @@ rm /tmp/autostart-wa.tmp
 # install-wa
 cat << 'EOG_INSTALL' > /tmp/install-wa.tmp
 #!/bin/bash
+# --- Shared Paths ---
+BASE_DIR="/data/whatsapp-server"
+ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid"
+SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+CRON_LOG_FILE="${BASE_DIR}/cron.log"
+EXECUTABLE_NAME="titansys-whatsapp-linux"
+AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 set -e
 echo "--- WhatsApp Service Initial Installation ---"
 if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
@@ -92,6 +108,13 @@ rm /tmp/install-wa.tmp
 # config-wa
 cat << 'EOG_CONFIG' > /tmp/config-wa.tmp
 #!/bin/bash
+# --- Shared Paths ---
+BASE_DIR="/data/whatsapp-server"
+ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid"
+SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+CRON_LOG_FILE="${BASE_DIR}/cron.log"
+EXECUTABLE_NAME="titansys-whatsapp-linux"
 set -e
 echo "--- Interactive .env Configuration ---"
 if [ -f "${ENV_FILE}" ]; then set -a; source "${ENV_FILE}"; set +a; fi
@@ -107,17 +130,35 @@ rm /tmp/config-wa.tmp
 # stop-wa
 cat << 'EOG_STOP' > /tmp/stop-wa.tmp
 #!/bin/bash
+# --- Shared Paths ---
+BASE_DIR="/data/whatsapp-server"
+ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid"
+SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+CRON_LOG_FILE="${BASE_DIR}/cron.log"
+EXECUTABLE_NAME="titansys-whatsapp-linux"
 echo -e "🛑 Stopping the WhatsApp service..."
 if [ ! -f "${PID_FILE}" ]; then
     echo "PID file not found. Is the service running? Attempting to stop by name as a fallback."
     pkill -f "${EXECUTABLE_NAME}" || true
 else
     PID=$(cat "${PID_FILE}")
-    if ps -p $PID > /dev/null; then
+    if ps -p "$PID" > /dev/null 2>&1; then
         echo "Stopping process with PID ${PID}..."
         kill "${PID}"
-        while kill -0 "${PID}" > /dev/null 2>&1; do echo -n "."; sleep 1; done
-        echo -e "\nProcess stopped."
+        for i in {1..10}; do
+            if ! kill -0 "${PID}" > /dev/null 2>&1; then
+                echo -e "\nProcess stopped."
+                break
+            fi
+            echo -n "."
+            sleep 1
+        done
+        if kill -0 "${PID}" > /dev/null 2>&1; then
+            echo -e "\nProcess did not stop with SIGTERM, forcing kill..."
+            kill -9 "${PID}" || true
+            sleep 1
+        fi
     else
         echo "Process with PID ${PID} does not exist. Cleaning up PID file."
     fi
@@ -131,6 +172,14 @@ rm /tmp/stop-wa.tmp
 # restart-wa
 cat << 'EOG_RESTART' > /tmp/restart-wa.tmp
 #!/bin/bash
+# --- Shared Paths ---
+BASE_DIR="/data/whatsapp-server"
+ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid"
+SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+CRON_LOG_FILE="${BASE_DIR}/cron.log"
+EXECUTABLE_NAME="titansys-whatsapp-linux"
+AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 echo "🔄 Restarting the WhatsApp service...";
 /usr/local/bin/stop-wa
 sleep 2;
@@ -145,6 +194,14 @@ rm /tmp/restart-wa.tmp
 # update-wa
 cat << 'EOG_UPDATE' > /tmp/update-wa.tmp
 #!/bin/bash
+# --- Shared Paths ---
+BASE_DIR="/data/whatsapp-server"
+ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid"
+SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+CRON_LOG_FILE="${BASE_DIR}/cron.log"
+EXECUTABLE_NAME="titansys-whatsapp-linux"
+DOWNLOAD_URL="${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}"
 set -e
 echo "--- Updating WhatsApp Service Binary ---"
 /usr/local/bin/stop-wa
@@ -160,6 +217,12 @@ rm /tmp/update-wa.tmp
 # status-wa
 cat << 'EOG_STATUS' > /tmp/status-wa.tmp
 #!/bin/bash
+# --- Shared Paths ---
+BASE_DIR="/data/whatsapp-server"
+ENV_FILE="${BASE_DIR}/.env"
+PID_FILE="${BASE_DIR}/service.pid"
+SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+CRON_LOG_FILE="${BASE_DIR}/cron.log"
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m';
 echo "--- WhatsApp Service Status ---"
 if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
@@ -181,7 +244,7 @@ echo -e "${GREEN}✅ All management commands created successfully.${NC}"
 echo -e "${YELLOW}📦 Preparing environment...${NC}"
 if [ ! -f "${EXECUTABLE_PATH}" ]; then
   echo "Downloading binary for the first time from ${DOWNLOAD_URL}..."
-  cd "${BASE_DIR}" && curl -sSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+  cd "${BASE_DIR}" && curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
 fi
 
 echo -e "\n${CYAN}--------------------------------------------------------${NC}"
