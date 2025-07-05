@@ -143,11 +143,22 @@ if [ ! -f "${PID_FILE}" ]; then
     pkill -f "${EXECUTABLE_NAME}" || true
 else
     PID=$(cat "${PID_FILE}")
-    if ps -p "$PID" > /dev/null; then
+    if ps -p "$PID" > /dev/null 2>&1; then
         echo "Stopping process with PID ${PID}..."
         kill "${PID}"
-        while kill -0 "${PID}" > /dev/null 2>&1; do echo -n "."; sleep 1; done
-        echo -e "\nProcess stopped."
+        for i in {1..10}; do
+            if ! kill -0 "${PID}" > /dev/null 2>&1; then
+                echo -e "\nProcess stopped."
+                break
+            fi
+            echo -n "."
+            sleep 1
+        done
+        if kill -0 "${PID}" > /dev/null 2>&1; then
+            echo -e "\nProcess did not stop with SIGTERM, forcing kill..."
+            kill -9 "${PID}" || true
+            sleep 1
+        fi
     else
         echo "Process with PID ${PID} does not exist. Cleaning up PID file."
     fi
