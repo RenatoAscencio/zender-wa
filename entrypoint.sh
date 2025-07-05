@@ -8,41 +8,13 @@ EXECUTABLE_NAME="titansys-whatsapp-linux"
 EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
 DOWNLOAD_URL="https://raw.anycdn.link/wa/linux.zip"
 
-# --- Management Commands Creation ---
-# These commands are always created so they are available in the console.
-
-# install-wa (The main setup and first-run command)
-cat << EOG > /usr/local/bin/install-wa
-#!/bin/bash
-set -e
-echo "--- WhatsApp Service Initial Installation ---"
-
-# Logic to create .env: either from environment variables or interactively
-if [ -n "\$PCODE" ] && [ -n "\$KEY" ]; then
-    echo "✅ Environment variables found. Creating .env file automatically..."
-    {
-        echo "PORT=\${PORT:-443}"
-        echo "PCODE=\$PCODE"
-        echo "KEY=\$KEY"
-    } > "${ENV_FILE}"
-else
-    if [ ! -f "${ENV_FILE}" ]; then
-        echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
-        config-wa
-    else
-        echo "✅ Existing .env file found."
-    fi
-fi
-
-# Load variables from the .env file
-set -a; source "${ENV_FILE}"; set +a
-
-# Configure cron job
-echo "🕒 Configuring cron job for auto-restart..."
-# Start the cron daemon in the background
+# --- Always-on Services and Commands ---
+# Start the cron daemon immediately on container start
+echo "🕒 Starting cron daemon..."
 service cron start
+
+# Create the watchdog script for cron
 AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
-# Create a more robust autostart script with logging
 cat << EOG_AUTO > "\$AUTOSTART_SCRIPT_PATH"
 #!/bin/bash
 # Log execution to a file for debugging
@@ -50,15 +22,16 @@ exec >> ${BASE_DIR}/cron.log 2>&1
 echo "---"
 echo "Cron job ran at: \$(date)"
 
-# Source the environment file to get variables
-if [ -f ${ENV_FILE} ]; then
-  set -a; source ${ENV_FILE}; set +a
-else
-  echo "Error: .env file not found. Cannot start service."
-  exit 1
+# The service can only start if the .env file exists
+if [ ! -f ${ENV_FILE} ]; then
+  echo "Info: .env file not found. Service is not configured to run yet."
+  exit 0
 fi
 
-# Check if service is running using absolute path for pgrep
+# Source the environment file to get variables
+set -a; source ${ENV_FILE}; set +a
+
+# Check if service is running
 if ! /usr/bin/pgrep -f "${EXECUTABLE_NAME}" > /dev/null; then
   echo "Service not running. Attempting to start..."
   cd "${BASE_DIR}" && ./"${EXECUTABLE_NAME}" --pcode="\$PCODE" --key="\$KEY" --host="0.0.0.0" --port="\$PORT" &
@@ -68,14 +41,25 @@ else
 fi
 EOG_AUTO
 chmod +x "\$AUTOSTART_SCRIPT_PATH"
-# Clean up old cron jobs and add the new ones
-(crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * \${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot \${AUTOSTART_SCRIPT_PATH}") | crontab -
-echo "✅ Cron job configured."
 
-# Start the service
-echo "🚀 Starting WhatsApp service..."
-cd "${BASE_DIR}" && ./"${EXECUTABLE_NAME}" --pcode="\$PCODE" --key="\$KEY" --host="0.0.0.0" --port="\$PORT" &
-echo "✅ Service started in the background. Use 'docker logs' or check the panel for output."
+# Add the watchdog script to the crontab
+(crontab -l 2>/dev/null | grep -v autostart-wa ; echo "* * * * * \${AUTOSTART_SCRIPT_PATH}" ; echo "@reboot \${AUTOSTART_SCRIPT_PATH}") | crontab -
+echo "✅ Cron job for auto-restart is active."
+
+# --- Management Commands Creation ---
+# install-wa (The main setup and first-run command)
+cat << EOG > /usr/local/bin/install-wa
+#!/bin/bash
+set -e
+echo "--- WhatsApp Service Initial Installation ---"
+if [ ! -f "${ENV_FILE}" ]; then
+    echo "⚠️ No .env file found. Running initial configuration..."
+    config-wa
+fi
+# Manually trigger the autostart script to launch the service immediately
+echo "🚀 Triggering service start..."
+autostart-wa
+echo "✅ Service started in the background. The cron job will now manage it."
 EOG
 
 # config-wa (Interactive .env editor)
@@ -129,7 +113,7 @@ fi
 echo "--------------------------------------------------------"
 echo "🔴 ACTION REQUIRED: Environment is ready for setup."
 echo "--------------------------------------------------------"
-echo "The container is now in standby mode."
+echo "The container is now in standby mode. The cron watchdog is active."
 echo ""
 echo "   1. Open the console for this container."
 echo "   2. Run the command: install-wa"
