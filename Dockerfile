@@ -38,6 +38,7 @@ VOLUME /data/whatsapp-server
 
 # Expose the port
 EXPOSE 443
+HEALTHCHECK CMD /usr/local/bin/status-wa || exit 1
 
 # The command that will run when the container starts
 ENTRYPOINT ["entrypoint.sh"]
