@@ -71,7 +71,9 @@ AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
 cat << 'EOG_AUTO' > /tmp/autostart-wa.tmp
 #!/bin/bash
 BASE_DIR="/data/whatsapp-server"
+# shellcheck disable=SC2034
 ENV_FILE="${BASE_DIR}/.env"
+# shellcheck disable=SC2034
 PID_FILE="${BASE_DIR}/service.pid"
 SERVICE_LOG_FILE="${BASE_DIR}/service.log"
 CRON_LOG_FILE="${BASE_DIR}/cron.log"
@@ -149,6 +151,7 @@ rm /tmp/config-wa.tmp
 # stop-wa
 cat << 'EOG_STOP' > /tmp/stop-wa.tmp
 #!/bin/bash
+# shellcheck disable=SC2034
 PID_FILE="/data/whatsapp-server/service.pid"
 EXECUTABLE_NAME="titansys-whatsapp-linux"
 echo -e "🛑 Stopping the WhatsApp service..."
@@ -237,6 +240,7 @@ rm /tmp/update-wa.tmp
 # status-wa
 cat << 'EOG_STATUS' > /tmp/status-wa.tmp
 #!/bin/bash
+# shellcheck disable=SC2034
 PID_FILE="/data/whatsapp-server/service.pid"
 SERVICE_LOG_FILE="/data/whatsapp-server/service.log"
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'; BOLD='\033[1m';
