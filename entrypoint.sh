@@ -213,7 +213,28 @@ echo "--- Updating WhatsApp Service Binary ---"
 /usr/local/bin/stop-wa
 echo "Downloading latest binary from ${DOWNLOAD_URL}..."
 cd "/data/whatsapp-server"
-curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "titansys-whatsapp-linux"
+if ! curl -fsSL "${DOWNLOAD_URL}" -o linux.zip; then
+    echo "Error: failed to download binary."
+    exit 1
+fi
+if [ ! -f linux.zip ]; then
+    echo "Error: linux.zip not found after download."
+    exit 1
+fi
+if [ -n "${DOWNLOAD_SHA256}" ]; then
+    if ! echo "${DOWNLOAD_SHA256}  linux.zip" | sha256sum -c -; then
+        echo "Error: checksum verification failed.";
+        rm -f linux.zip
+        exit 1
+    fi
+fi
+if ! unzip -oq linux.zip; then
+    echo "Error: failed to unzip linux.zip."
+    rm -f linux.zip
+    exit 1
+fi
+rm linux.zip
+chmod +x "titansys-whatsapp-linux"
 echo "✅ Update complete. Triggering immediate restart...";
 /usr/local/bin/autostart-wa
 EOG_UPDATE
@@ -246,7 +267,29 @@ echo -e "${LIGHT_GREEN}${BOLD}✅ All management commands created successfully.$
 echo -e "${YELLOW}${BOLD}📦 Preparing environment...${NC}"
 if [ ! -f "${EXECUTABLE_PATH}" ]; then
   echo "Downloading binary for the first time from ${DOWNLOAD_URL}..."
-  cd "${BASE_DIR}" && curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && unzip -oq linux.zip && rm linux.zip && chmod +x "${EXECUTABLE_NAME}"
+  cd "${BASE_DIR}"
+  if ! curl -fsSL "${DOWNLOAD_URL}" -o linux.zip; then
+    echo "Error: failed to download binary."
+    exit 1
+  fi
+  if [ ! -f linux.zip ]; then
+    echo "Error: linux.zip not found after download."
+    exit 1
+  fi
+  if [ -n "${DOWNLOAD_SHA256}" ]; then
+    if ! echo "${DOWNLOAD_SHA256}  linux.zip" | sha256sum -c -; then
+      echo "Error: checksum verification failed."
+      rm -f linux.zip
+      exit 1
+    fi
+  fi
+  if ! unzip -oq linux.zip; then
+    echo "Error: failed to unzip linux.zip."
+    rm -f linux.zip
+    exit 1
+  fi
+  rm linux.zip
+  chmod +x "${EXECUTABLE_NAME}"
 fi
 
 # --- Final Instructions ---
