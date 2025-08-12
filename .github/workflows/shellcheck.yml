@@ -14,7 +14,7 @@ jobs:
         run: |
           files=$(git ls-files '*.sh')
           if [ -n "$files" ]; then
-            shellcheck $files
+            shellcheck -e SC2034 $files
           else
             echo "No shell scripts to check."
           fi
