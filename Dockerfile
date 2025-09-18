@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 
 # --- Build Stage ---
-FROM alpine:3.19 AS builder
+FROM alpine:3.21 AS builder
 
 # Install only build dependencies
 RUN apk add --no-cache \
@@ -27,7 +27,7 @@ RUN curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && \
     rm linux.zip
 
 # --- Runtime Stage ---
-FROM alpine:3.19
+FROM alpine:3.21
 
 # Build-time arguments
 ARG BUILD_DATE
@@ -43,14 +43,24 @@ ENV BUILD_DATE=$BUILD_DATE \
 RUN addgroup -g 1001 -S whatsapp && \
     adduser -u 1001 -S whatsapp -G whatsapp
 
-# Install runtime dependencies only
-RUN apk add --no-cache \
+# Install runtime dependencies and security patches
+RUN apk update && \
+    apk upgrade --no-cache && \
+    apk add --no-cache \
     bash \
     curl \
     procps \
     dcron \
     tzdata \
-    ca-certificates && \
+    ca-certificates \
+    libcrypto3 \
+    libssl3 \
+    busybox \
+    nghttp2-libs && \
+    # Fix CVE vulnerabilities
+    apk add --no-cache --upgrade \
+    apk-tools \
+    alpine-baselayout && \
     # Clean up
     rm -rf /var/cache/apk/*
 
