@@ -1,0 +1,48 @@
+name: Verify Docker Hub Publishing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    name: ✅ Verify Docker Hub Config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Docker Hub Credentials
+        run: |
+          echo "🔍 Verificando configuración de Docker Hub..."
+
+          # Verificar que las variables existan (sin mostrar valores)
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "✅ DOCKERHUB_USERNAME está configurado"
+          else
+            echo "❌ DOCKERHUB_USERNAME NO está configurado"
+            exit 1
+          fi
+
+          if [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "✅ DOCKERHUB_TOKEN está configurado"
+          else
+            echo "❌ DOCKERHUB_TOKEN NO está configurado"
+            exit 1
+          fi
+
+          echo "✅ Todas las credenciales están configuradas correctamente"
+
+      - name: Test Docker Hub Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Verify Login Success
+        run: |
+          echo "✅ Login exitoso en Docker Hub"
+          echo "📦 Las imágenes se publicarán en: docker.io/renatoascencio/zender-wa"
+          echo ""
+          echo "Tags disponibles después del build:"
+          echo "  - renatoascencio/zender-wa:latest"
+          echo "  - renatoascencio/zender-wa:main"
+          echo "  - renatoascencio/zender-wa:optimized"
