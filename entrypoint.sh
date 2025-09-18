@@ -166,7 +166,7 @@ nohup "./${EXECUTABLE_NAME}" \
     --port="${PORT:-443}" \
     >> "${SERVICE_LOG_FILE}" 2>&1 &
 
-local pid=$!
+pid=$!
 echo "$pid" > "${PID_FILE}"
 log_info "Service started with PID $pid"
 EOF
@@ -271,7 +271,6 @@ if [[ ! -f "${PID_FILE}" ]]; then
     exit 0
 fi
 
-local pid
 pid=$(cat "${PID_FILE}")
 
 if ! kill -0 "$pid" 2>/dev/null; then
@@ -386,9 +385,7 @@ readonly BOLD='\033[1m'
 echo "--- WhatsApp Service Status ---"
 
 if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
-    local pid
     pid=$(cat "${PID_FILE}")
-    local uptime
     uptime=$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ' || echo "unknown")
 
     echo -e "${GREEN}${BOLD}✅ Service is RUNNING${NC}"
