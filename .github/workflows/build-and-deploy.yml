@@ -87,17 +87,39 @@ jobs:
       - name: Run Unit Tests
         if: matrix.test-type == 'unit'
         run: |
-          # Test script validation
-          docker run --rm -v $PWD/tests:/tests zender-wa:test bash -c "
-            # Test entrypoint script
-            bash -n /usr/local/bin/entrypoint.sh
-            # Test monitoring scripts
-            bash -n /data/whatsapp-server/monitoring/healthcheck.sh
-            bash -n /data/whatsapp-server/monitoring/log-monitor.sh
-            # Test utility scripts
-            bash -n /data/whatsapp-server/utils/validation.sh
-            bash -n /data/whatsapp-server/utils/process-manager.sh
-          "
+          # Test script validation using local files
+          echo "Running shell script syntax validation..."
+
+          # Test entrypoint script
+          bash -n entrypoint.sh
+          echo "✅ entrypoint.sh syntax OK"
+
+          # Test monitoring scripts
+          bash -n monitoring/healthcheck.sh
+          bash -n monitoring/log-monitor.sh
+          bash -n monitoring/prometheus-exporter.sh
+          echo "✅ Monitoring scripts syntax OK"
+
+          # Test utility scripts
+          bash -n utils/validation.sh
+          bash -n utils/process-manager.sh
+          echo "✅ Utility scripts syntax OK"
+
+          # Test security scripts
+          bash -n security/security-scan.sh
+          echo "✅ Security scripts syntax OK"
+
+          # Test deployment scripts
+          bash -n scripts/deploy.sh
+          echo "✅ Deployment scripts syntax OK"
+
+          # Test framework scripts
+          bash -n tests/test-framework.sh
+          bash -n tests/test-runner.sh
+          bash -n tests/unit/test-scripts.sh
+          echo "✅ Test framework syntax OK"
+
+          echo "🎉 All shell scripts passed syntax validation!"
 
       - name: Run Integration Tests
         if: matrix.test-type == 'integration'
