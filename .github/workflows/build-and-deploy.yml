@@ -124,36 +124,51 @@ jobs:
       - name: Run Integration Tests
         if: matrix.test-type == 'integration'
         run: |
-          # Test container startup and basic functionality
+          echo "Starting integration tests..."
+
+          # Test container startup
+          echo "Creating test container..."
           docker run -d --name test-container \
             -e PCODE="test-code" \
             -e KEY="test-key" \
-            zender-wa:test
+            zender-wa:test || {
+            echo "❌ Failed to create container"
+            exit 1
+          }
 
-          # Wait for container to initialize
-          echo "Waiting for container initialization..."
-          sleep 30
+          # Give container time to initialize
+          echo "Waiting 10 seconds for container initialization..."
+          sleep 10
 
-          # Check if container is running
-          if ! docker ps | grep -q test-container; then
-            echo "❌ Container failed to start"
-            docker logs test-container
+          # Check container status
+          echo "Checking container status..."
+          docker ps -a | grep test-container || echo "Container not in ps output"
+
+          # Check if container is actually running
+          if docker ps --format "table {{.Names}}\t{{.Status}}" | grep -q test-container; then
+            echo "✅ Container is running"
+          else
+            echo "❌ Container is not running. Checking logs:"
+            docker logs test-container 2>&1 || echo "No logs available"
+            echo "Container inspect:"
+            docker inspect test-container --format='{{.State.Status}} - {{.State.ExitCode}} - {{.State.Error}}' || echo "Cannot inspect"
             exit 1
           fi
 
-          # Test basic functionality (status-wa command should be available)
-          echo "Testing status command..."
-          docker exec test-container status-wa || {
-            echo "❌ Status command failed"
-            docker logs test-container
+          # Test status command exists and is executable
+          echo "Testing status-wa command..."
+          docker exec test-container sh -c "which status-wa && status-wa" || {
+            echo "❌ Status command test failed"
+            echo "Container logs:"
+            docker logs --tail 50 test-container 2>&1
             exit 1
           }
 
           echo "✅ Integration tests passed!"
 
           # Cleanup
-          docker stop test-container
-          docker rm test-container
+          docker stop test-container || true
+          docker rm test-container || true
 
       - name: Run Performance Tests
         if: matrix.test-type == 'performance'
