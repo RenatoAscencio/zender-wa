@@ -98,6 +98,21 @@ docker cp old_container:/tmp/backup.tar.gz ./backup.tar.gz
 ./scripts/deploy.sh deploy -p "YOUR_PCODE" -k "YOUR_KEY"
 ```
 
+#### **🌟 EasyPanel Deployment (Un Solo Clic)**
+
+Deploy with EasyPanel for effortless management and monitoring:
+
+[![Deploy on EasyPanel](https://easypanel.io/img/deploy-on-easypanel.svg)](https://easypanel.io/deploy?template=https://raw.githubusercontent.com/RenatoAscencio/zender-wa/main/easypanel.json)
+
+**Features include:**
+- One-click deployment with web interface
+- Automatic SSL/TLS certificate management
+- Built-in backup and monitoring
+- Resource limits and scaling
+- Domain management with Traefik
+
+📖 **[Complete EasyPanel Guide →](EASYPANEL.md)**
+
 ---
 
 ## 🛠️ Advanced Management & Monitoring

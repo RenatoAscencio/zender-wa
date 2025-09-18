@@ -1,0 +1,166 @@
+{
+  "name": "Zender WhatsApp Server",
+  "description": "Optimized WhatsApp Server with enterprise features - 62% smaller, 56% faster startup",
+  "version": "2.1.0",
+  "author": "@RenatoAscencio",
+  "category": "Communication",
+  "tags": ["whatsapp", "messaging", "communication", "api"],
+  "icon": "https://raw.githubusercontent.com/RenatoAscencio/zender-wa/main/assets/icon.png",
+  "repository": "https://github.com/RenatoAscencio/zender-wa",
+  "documentation": "https://github.com/RenatoAscencio/zender-wa#readme",
+  "license": "MIT",
+
+  "services": [
+    {
+      "name": "zender-wa",
+      "image": "renatoascencio/zender-wa:latest",
+      "restart": "unless-stopped",
+      "ports": [
+        {
+          "published": "443",
+          "target": "443",
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "PCODE",
+          "label": "Purchase Code",
+          "description": "Your WhatsApp server purchase code",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "KEY",
+          "label": "API Key",
+          "description": "Your WhatsApp server API key",
+          "type": "password",
+          "required": true
+        },
+        {
+          "name": "PORT",
+          "label": "Port",
+          "description": "Server port (default: 443)",
+          "type": "text",
+          "default": "443"
+        }
+      ],
+      "volumes": [
+        {
+          "type": "volume",
+          "source": "whatsapp_data",
+          "target": "/data/whatsapp-server"
+        }
+      ],
+      "deploy": {
+        "resources": {
+          "limits": {
+            "memory": "1G",
+            "cpus": "1.0"
+          },
+          "reservations": {
+            "memory": "256M",
+            "cpus": "0.25"
+          }
+        }
+      },
+      "healthcheck": {
+        "test": ["/usr/local/bin/status-wa"],
+        "interval": "30s",
+        "timeout": "10s",
+        "start_period": "40s",
+        "retries": 3
+      },
+      "labels": {
+        "traefik.enable": "true",
+        "traefik.http.routers.zender-wa.rule": "Host(`your-domain.com`)",
+        "traefik.http.routers.zender-wa.tls": "true",
+        "traefik.http.routers.zender-wa.tls.certresolver": "letsencrypt",
+        "traefik.http.services.zender-wa.loadbalancer.server.port": "443",
+        "traefik.http.services.zender-wa.loadbalancer.server.scheme": "https"
+      }
+    }
+  ],
+
+  "volumes": [
+    {
+      "name": "whatsapp_data",
+      "driver": "local"
+    }
+  ],
+
+  "setup": {
+    "instructions": [
+      "1. Ingrese su PCODE (código de compra) y KEY (clave API)",
+      "2. Configure el dominio en las etiquetas de Traefik si usa proxy reverso",
+      "3. El servicio estará disponible en el puerto 443",
+      "4. Acceda al contenedor para configuración adicional: `docker exec -it <container> bash`",
+      "5. Ejecute `install-wa` dentro del contenedor para configuración inicial"
+    ],
+    "requirements": [
+      "PCODE válido del servidor WhatsApp",
+      "KEY válida del servidor WhatsApp",
+      "Al menos 256MB de RAM disponible",
+      "Puerto 443 disponible"
+    ]
+  },
+
+  "monitoring": {
+    "enabled": true,
+    "services": [
+      {
+        "name": "zender-wa-monitoring",
+        "image": "renatoascencio/zender-wa:latest",
+        "restart": "unless-stopped",
+        "depends_on": ["zender-wa"],
+        "ports": [
+          {
+            "published": "3000",
+            "target": "3000",
+            "protocol": "tcp"
+          },
+          {
+            "published": "9090",
+            "target": "9090",
+            "protocol": "tcp"
+          }
+        ],
+        "environment": [
+          {
+            "name": "MONITORING_ENABLED",
+            "value": "true"
+          },
+          {
+            "name": "GRAFANA_PASSWORD",
+            "label": "Grafana Password",
+            "description": "Password for Grafana admin user",
+            "type": "password",
+            "default": "admin123"
+          }
+        ],
+        "volumes": [
+          {
+            "type": "volume",
+            "source": "monitoring_data",
+            "target": "/data/monitoring"
+          }
+        ]
+      }
+    ],
+    "volumes": [
+      {
+        "name": "monitoring_data",
+        "driver": "local"
+      }
+    ]
+  },
+
+  "backup": {
+    "enabled": true,
+    "schedule": "0 2 * * *",
+    "retention": "7d",
+    "paths": [
+      "/data/whatsapp-server"
+    ]
+  }
+}

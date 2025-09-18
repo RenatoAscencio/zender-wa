@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  zender-wa:
+    image: renatoascencio/zender-wa:latest
+    container_name: zender-wa
+    restart: unless-stopped
+    ports:
+      - "443:443"
+    environment:
+      - PCODE=${PCODE}
+      - KEY=${KEY}
+      - PORT=${PORT:-443}
+    volumes:
+      - whatsapp_data:/data/whatsapp-server
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["/usr/local/bin/status-wa"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    labels:
+      # EasyPanel labels
+      - "easypanel.managed=true"
+      - "easypanel.service=zender-wa"
+      - "easypanel.version=2.1.0"
+
+      # Traefik labels (opcional para proxy reverso)
+      - "traefik.enable=true"
+      - "traefik.http.routers.zender-wa.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.zender-wa.tls=true"
+      - "traefik.http.routers.zender-wa.tls.certresolver=letsencrypt"
+      - "traefik.http.services.zender-wa.loadbalancer.server.port=443"
+      - "traefik.http.services.zender-wa.loadbalancer.server.scheme=https"
+
+volumes:
+  whatsapp_data:
+    driver: local
+    labels:
+      - "easypanel.backup=true"
+      - "easypanel.backup.schedule=0 2 * * *"
+      - "easypanel.backup.retention=7d"
+
+networks:
+  default:
+    name: easypanel-network
+    external: true
