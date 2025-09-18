@@ -143,6 +143,9 @@ jobs:
     name: 🏗️ Build Multi-Arch Images
     runs-on: ubuntu-latest
     needs: [security-scan, test]
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         platform:
@@ -210,6 +213,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -243,6 +249,10 @@ jobs:
     name: 🔍 Scan Built Images
     runs-on: ubuntu-latest
     needs: build
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
     strategy:
       matrix:
         platform: [linux/amd64, linux/arm64]
