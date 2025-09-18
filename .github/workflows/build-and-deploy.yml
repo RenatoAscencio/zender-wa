@@ -40,7 +40,7 @@ jobs:
       - name: Run hadolint (Dockerfile linter)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: Dockerfile.optimized
+          dockerfile: Dockerfile
           format: sarif
           output-file: hadolint-results.sarif
           no-fail: true
@@ -70,7 +70,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.optimized
+          file: Dockerfile
           load: true
           tags: zender-wa:test
           cache-from: type=gha
@@ -199,7 +199,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.optimized
+          file: Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
