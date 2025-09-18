@@ -66,6 +66,12 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 COPY --from=builder /build/titansys-whatsapp-linux ${BASE_DIR}/
 RUN chown whatsapp:whatsapp ${BASE_DIR}/${EXECUTABLE_NAME}
 
+# Create a simple status script for healthcheck
+RUN echo '#!/bin/sh' > /usr/local/bin/status-wa && \
+    echo 'echo "WhatsApp Server Status Check"' >> /usr/local/bin/status-wa && \
+    echo 'ps aux | grep -v grep | grep -q titansys-whatsapp-linux && echo "✅ Service is running" || echo "❌ Service is not running"' >> /usr/local/bin/status-wa && \
+    chmod +x /usr/local/bin/status-wa
+
 # Set working directory
 WORKDIR ${BASE_DIR}
 
