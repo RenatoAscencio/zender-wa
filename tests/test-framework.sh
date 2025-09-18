@@ -2,6 +2,8 @@
 # Test Framework for Zender WhatsApp Server
 # Provides common testing utilities and assertions
 
+set -euo pipefail
+
 # Colors for output
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
