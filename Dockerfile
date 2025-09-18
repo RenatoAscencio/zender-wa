@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 
 # --- Build Stage ---
-FROM alpine:3.21 AS builder
+FROM alpine:edge AS builder
 
 # Install only build dependencies
 RUN apk add --no-cache \
@@ -27,7 +27,7 @@ RUN curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && \
     rm linux.zip
 
 # --- Runtime Stage ---
-FROM alpine:3.21
+FROM alpine:edge
 
 # Build-time arguments
 ARG BUILD_DATE
@@ -43,26 +43,21 @@ ENV BUILD_DATE=$BUILD_DATE \
 RUN addgroup -g 1001 -S whatsapp && \
     adduser -u 1001 -S whatsapp -G whatsapp
 
-# Install runtime dependencies and security patches
+# Install minimal runtime dependencies with latest patches
 RUN apk update && \
-    apk upgrade --no-cache && \
+    apk upgrade --no-cache --available && \
     apk add --no-cache \
     bash \
     curl \
     procps \
     dcron \
     tzdata \
-    ca-certificates \
-    libcrypto3 \
-    libssl3 \
-    busybox \
-    nghttp2-libs && \
-    # Fix CVE vulnerabilities
-    apk add --no-cache --upgrade \
-    apk-tools \
-    alpine-baselayout && \
-    # Clean up
-    rm -rf /var/cache/apk/*
+    ca-certificates && \
+    # Update busybox to latest
+    apk add --no-cache --upgrade busybox && \
+    # Clean up and remove unnecessary files
+    rm -rf /var/cache/apk/* /tmp/* /var/tmp/* \
+    /usr/share/man/* /usr/share/doc/*
 
 # Create directory structure with proper permissions
 RUN mkdir -p ${BASE_DIR} && \
@@ -92,6 +87,12 @@ EXPOSE 443
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD ["/usr/local/bin/status-wa"]
+
+# Security hardening
+RUN chmod 700 ${BASE_DIR} && \
+    chmod 500 /usr/local/bin/*.sh 2>/dev/null || true && \
+    # Remove setuid/setgid binaries we don't need
+    find / -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
 
 # Switch to non-root user
 USER whatsapp
