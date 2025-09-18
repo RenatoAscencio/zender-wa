@@ -1,10 +1,30 @@
 # 🚀 Instalación en EasyPanel
 
-## Método 1: Un Solo Clic (Recomendado)
+## Método 1: Generador de Templates Original
+
+**Opción más simple y probada:**
+
+1. **Generar configuración YAML:**
+   - Visita: **[https://general-templates.vrfg1p.easypanel.host/zender-wa](https://general-templates.vrfg1p.easypanel.host/zender-wa)**
+   - La página generará un bloque de código YAML
+   - Haz clic en **Copy** para copiar el código
+
+2. **Desplegar en EasyPanel:**
+   - En tu proyecto de EasyPanel, haz clic en **+ Service**
+   - Ve a la pestaña **Custom**
+   - Selecciona **Create From Schema**
+   - Pega el código YAML en el cuadro de texto
+
+3. **Configurar variables:**
+   - Ve a la pestaña **Environment**
+   - Ingresa tu `PCODE` y `KEY`
+   - Haz clic en **Deploy**
+
+## Método 2: Template JSON (Nuevo)
 
 [![Deploy on EasyPanel](https://easypanel.io/img/deploy-on-easypanel.svg)](https://easypanel.io/deploy?template=https://raw.githubusercontent.com/RenatoAscencio/zender-wa/main/easypanel.json)
 
-## Método 2: Configuración Manual
+## Método 3: Configuración Manual
 
 ### 📋 Requisitos Previos
 
@@ -111,20 +131,40 @@ Variables de entorno:
 
 ## 🔧 Configuración Post-Instalación
 
-1. **Acceder al contenedor:**
+### Método Automático (Recomendado)
+
+Si configuraste las variables `PCODE` y `KEY` en EasyPanel, el servicio se configurará automáticamente.
+
+### Método Manual
+
+1. **Acceder a la consola del contenedor:**
    ```bash
    docker exec -it zender-wa bash
    ```
 
-2. **Ejecutar configuración inicial:**
+2. **Ejecutar el instalador:**
    ```bash
    install-wa
    ```
+   El instalador te guiará para ingresar las claves requeridas.
 
-3. **Verificar estado:**
+3. **Verificar estado del servicio:**
    ```bash
    status-wa
    ```
+
+### Configuración con Variables de Entorno
+
+Alternativamente, puedes crear manualmente el archivo `.env` usando la plantilla `.env.example`:
+
+```bash
+# Variables requeridas
+PORT=443                    # Puerto del servicio
+PCODE=tu_codigo_de_compra  # Código de compra único de Zender
+KEY=tu_clave_api           # Clave API única de Zender
+```
+
+> **⚠️ Importante:** Tanto el Purchase Code como la API Key son obligatorios para el funcionamiento del servicio.
 
 ## 📱 Comandos de Gestión
 

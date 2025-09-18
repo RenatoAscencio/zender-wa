@@ -98,10 +98,15 @@ docker cp old_container:/tmp/backup.tar.gz ./backup.tar.gz
 ./scripts/deploy.sh deploy -p "YOUR_PCODE" -k "YOUR_KEY"
 ```
 
-#### **🌟 EasyPanel Deployment (Un Solo Clic)**
+#### **🌟 EasyPanel Deployment**
 
-Deploy with EasyPanel for effortless management and monitoring:
+**Method 1: Template Generator (Original & Recommended)**
+1. Visit: **[https://general-templates.vrfg1p.easypanel.host/zender-wa](https://general-templates.vrfg1p.easypanel.host/zender-wa)**
+2. Copy the generated YAML code
+3. In EasyPanel: **+ Service** → **Custom** → **Create From Schema**
+4. Paste YAML code, add your `PCODE` and `KEY`, then **Deploy**
 
+**Method 2: JSON Template (New)**
 [![Deploy on EasyPanel](https://easypanel.io/img/deploy-on-easypanel.svg)](https://easypanel.io/deploy?template=https://raw.githubusercontent.com/RenatoAscencio/zender-wa/main/easypanel.json)
 
 **Features include:**
