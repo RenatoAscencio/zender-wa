@@ -1,0 +1,158 @@
+groups:
+  - name: whatsapp_alerts
+    rules:
+      # Service availability alerts
+      - alert: WhatsAppServiceDown
+        expr: whatsapp_service_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WhatsApp service is down"
+          description: "The WhatsApp service has been down for more than 1 minute."
+
+      - alert: WhatsAppServiceUnhealthy
+        expr: whatsapp_health_status == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WhatsApp service health check failing"
+          description: "The WhatsApp service health check has been failing for more than 5 minutes."
+
+      # Resource alerts
+      - alert: HighMemoryUsage
+        expr: whatsapp_process_memory_bytes > 1073741824  # 1GB
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "WhatsApp service is using more than 1GB of memory: {{ $value | humanize }}B"
+
+      - alert: CriticalMemoryUsage
+        expr: whatsapp_process_memory_bytes > 1610612736  # 1.5GB
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "WhatsApp service is using more than 1.5GB of memory: {{ $value | humanize }}B"
+
+      - alert: HighCPUUsage
+        expr: whatsapp_process_cpu_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "WhatsApp service CPU usage is above 80%: {{ $value }}%"
+
+      - alert: CriticalCPUUsage
+        expr: whatsapp_process_cpu_percent > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "WhatsApp service CPU usage is above 95%: {{ $value }}%"
+
+      # Disk space alerts
+      - alert: LowDiskSpace
+        expr: whatsapp_disk_available_bytes < 1073741824  # 1GB
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space"
+          description: "Available disk space is below 1GB: {{ $value | humanize }}B"
+
+      - alert: CriticalDiskSpace
+        expr: whatsapp_disk_available_bytes < 536870912  # 512MB
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space"
+          description: "Available disk space is below 512MB: {{ $value | humanize }}B"
+
+      # Log error alerts
+      - alert: HighErrorRate
+        expr: rate(whatsapp_logs_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate in logs"
+          description: "Error rate is above 0.1 errors per second: {{ $value }}"
+
+      - alert: CriticalErrorRate
+        expr: rate(whatsapp_logs_errors_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate in logs"
+          description: "Error rate is above 0.5 errors per second: {{ $value }}"
+
+      # Network connection alerts
+      - alert: TooManyConnections
+        expr: whatsapp_network_connections_total > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of network connections"
+          description: "Total network connections exceed 1000: {{ $value }}"
+
+      - alert: NoEstablishedConnections
+        expr: whatsapp_network_connections_established == 0 and whatsapp_service_up == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No established network connections"
+          description: "Service is running but has no established network connections."
+
+  - name: system_alerts
+    rules:
+      # System resource alerts
+      - alert: SystemHighMemoryUsage
+        expr: (whatsapp_system_memory_total_bytes - whatsapp_system_memory_available_bytes) / whatsapp_system_memory_total_bytes * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "System memory usage is high"
+          description: "System memory usage is above 80%"
+
+      - alert: SystemCriticalMemoryUsage
+        expr: (whatsapp_system_memory_total_bytes - whatsapp_system_memory_available_bytes) / whatsapp_system_memory_total_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "System memory usage is critical"
+          description: "System memory usage is above 90%"
+
+      # Container restart alerts
+      - alert: FrequentRestarts
+        expr: increase(whatsapp_process_uptime_seconds[1h]) < 3600
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Service restarting frequently"
+          description: "The WhatsApp service has restarted within the last hour."
+
+  - name: build_alerts
+    rules:
+      # Build and version alerts
+      - alert: UnknownVersion
+        expr: whatsapp_build_info{version="unknown"} == 1
+        for: 1m
+        labels:
+          severity: info
+        annotations:
+          summary: "Running unknown version"
+          description: "The WhatsApp service is running an unknown version."

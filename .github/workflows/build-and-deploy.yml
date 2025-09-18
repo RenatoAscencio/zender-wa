@@ -1,0 +1,313 @@
+name: 🚀 Build & Deploy Optimized Multi-Arch Images
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Weekly rebuild for security updates
+    - cron: '0 0 * * 0'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Security and code quality checks
+  security-scan:
+    name: 🔒 Security & Quality Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run hadolint (Dockerfile linter)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile.optimized
+          format: sarif
+          output-file: hadolint-results.sarif
+          no-fail: true
+
+      - name: Upload hadolint scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: hadolint-results.sarif
+
+  # Run automated tests
+  test:
+    name: 🧪 Automated Tests
+    runs-on: ubuntu-latest
+    needs: security-scan
+    strategy:
+      matrix:
+        test-type: [unit, integration, performance]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.optimized
+          load: true
+          tags: zender-wa:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Unit Tests
+        if: matrix.test-type == 'unit'
+        run: |
+          # Test script validation
+          docker run --rm -v $PWD/tests:/tests zender-wa:test bash -c "
+            # Test entrypoint script
+            bash -n /usr/local/bin/entrypoint.sh
+            # Test monitoring scripts
+            bash -n /data/whatsapp-server/monitoring/healthcheck.sh
+            bash -n /data/whatsapp-server/monitoring/log-monitor.sh
+            # Test utility scripts
+            bash -n /data/whatsapp-server/utils/validation.sh
+            bash -n /data/whatsapp-server/utils/process-manager.sh
+          "
+
+      - name: Run Integration Tests
+        if: matrix.test-type == 'integration'
+        run: |
+          # Test container startup and basic functionality
+          docker run -d --name test-container \
+            -e PCODE="test-code" \
+            -e KEY="test-key" \
+            zender-wa:test
+
+          # Wait for container to initialize
+          sleep 30
+
+          # Test management commands
+          docker exec test-container bash -c "
+            /usr/local/bin/validation.sh --system
+            /usr/local/bin/healthcheck.sh || true
+            status-wa
+          "
+
+          # Cleanup
+          docker stop test-container
+          docker rm test-container
+
+      - name: Run Performance Tests
+        if: matrix.test-type == 'performance'
+        run: |
+          # Test image size
+          IMAGE_SIZE=$(docker images zender-wa:test --format "table {{.Size}}" | tail -1)
+          echo "Image size: $IMAGE_SIZE"
+
+          # Test startup time
+          START_TIME=$(date +%s)
+          docker run -d --name perf-test \
+            -e PCODE="test" -e KEY="test" zender-wa:test
+
+          # Wait for container to be ready
+          timeout 60 bash -c 'until docker exec perf-test status-wa 2>/dev/null; do sleep 1; done'
+          END_TIME=$(date +%s)
+          STARTUP_TIME=$((END_TIME - START_TIME))
+
+          echo "Startup time: ${STARTUP_TIME}s"
+
+          # Verify startup time is under 30 seconds
+          if [ $STARTUP_TIME -gt 30 ]; then
+            echo "❌ Startup time exceeded 30s: ${STARTUP_TIME}s"
+            exit 1
+          else
+            echo "✅ Startup time within target: ${STARTUP_TIME}s"
+          fi
+
+          # Cleanup
+          docker stop perf-test
+          docker rm perf-test
+
+  # Build multi-architecture images
+  build:
+    name: 🏗️ Build Multi-Arch Images
+    runs-on: ubuntu-latest
+    needs: [security-scan, test]
+    strategy:
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+          - linux/arm/v7
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+            renatoascencio/zender-wa
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=optimized
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.optimized
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VERSION=${{ github.ref_name }}
+            VCS_REF=${{ github.sha }}
+
+  # Create multi-arch manifest
+  manifest:
+    name: 📦 Create Multi-Arch Manifest
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push manifest
+        run: |
+          # GitHub Container Registry
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized-linux-amd64 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized-linux-arm64 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized-linux-arm-v7
+
+          # Docker Hub
+          docker buildx imagetools create -t renatoascencio/zender-wa:optimized \
+            renatoascencio/zender-wa:optimized-linux-amd64 \
+            renatoascencio/zender-wa:optimized-linux-arm64 \
+            renatoascencio/zender-wa:optimized-linux-arm-v7
+
+  # Security scanning of built images
+  image-scan:
+    name: 🔍 Scan Built Images
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - name: Run Trivy vulnerability scanner on image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  # Deploy to staging/production
+  deploy:
+    name: 🚀 Deploy
+    runs-on: ubuntu-latest
+    needs: [build, manifest]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          # Add your deployment scripts here
+          # Example: kubectl apply -f k8s/staging/
+
+      - name: Smoke tests
+        run: |
+          echo "🧪 Running smoke tests..."
+          # Add smoke tests here
+
+      - name: Deploy to production
+        if: success()
+        run: |
+          echo "🎉 Deploying to production environment..."
+          # Add production deployment scripts here
+          # Example: kubectl apply -f k8s/production/
+
+  # Notify on completion
+  notify:
+    name: 📢 Notify
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always()
+    steps:
+      - name: Notify success
+        if: needs.deploy.result == 'success'
+        run: |
+          echo "✅ Deployment successful!"
+          # Add notification logic (Slack, Discord, etc.)
+
+      - name: Notify failure
+        if: needs.deploy.result == 'failure'
+        run: |
+          echo "❌ Deployment failed!"
+          # Add failure notification logic

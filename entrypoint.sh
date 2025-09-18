@@ -1,310 +1,458 @@
 #!/bin/bash
-set -e
-set -o pipefail
+set -euo pipefail
 
-# --- Visual & Color Definitions ---
-NC='\033[0m' # No Color
-BOLD='\033[1m'
-# --- Standard Colors ---
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-CYAN='\033[0;36m'
-# --- Bright Colors ---
-LIGHT_RED='\033[1;31m'
-LIGHT_GREEN='\033[1;32m'
-LIGHT_BLUE='\033[1;34m'
-LIGHT_MAGENTA='\033[1;35m'
-LIGHT_CYAN='\033[1;36m'
+# --- Configuration ---
+readonly BASE_DIR="/data/whatsapp-server"
+readonly SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+readonly CRON_LOG_FILE="${BASE_DIR}/cron.log"
+readonly ERROR_LOG_FILE="${BASE_DIR}/error.log"
+readonly EXECUTABLE_NAME="titansys-whatsapp-linux"
+readonly EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
+readonly PID_FILE="${BASE_DIR}/service.pid"
+readonly ENV_FILE="${BASE_DIR}/.env"
+readonly DOWNLOAD_URL="${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}"
 
-# --- Box Drawing Characters ---
-T_LEFT="╭"
-T_RIGHT="╮"
-B_LEFT="╰"
-B_RIGHT="╯"
-H_LINE="─"
-V_LINE="│"
-M_LEFT="├"
-M_RIGHT="┤"
-
-# --- Helper function for printing styled boxes ---
-print_box() {
-    local title=$1
-    local color=$2
-    local width=60
-    local title_len=${#title}
-    local padding_total=$((width - title_len - 4))
-    local padding_left=$((padding_total / 2))
-    local padding_right=$((padding_total - padding_left))
-
-    echo -e "${color}${BOLD}${T_LEFT}$(printf '%*s' "$width" '' | tr ' ' "${H_LINE}")${T_RIGHT}${NC}"
-    echo -e "${color}${BOLD}${V_LINE} $(printf '%*s' "$padding_left" '')${title}$(printf '%*s' "$padding_right" '') ${V_LINE}${NC}"
-    echo -e "${color}${BOLD}${M_LEFT}$(printf '%*s' "$width" '' | tr ' ' "${H_LINE}")${M_RIGHT}${NC}"
+# --- Logging Functions ---
+log_info() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $*" | tee -a "${SERVICE_LOG_FILE}"
 }
 
-# --- Display Build Information on Every Start ---
-echo
-print_box "🚀 WhatsApp Server Container" "${LIGHT_BLUE}"
-echo -e "${LIGHT_BLUE}${BOLD}${V_LINE}${NC} ${CYAN}Version:${NC}    ${VERSION:-unknown}"
-echo -e "${LIGHT_BLUE}${BOLD}${V_LINE}${NC} ${CYAN}Build Date:${NC} ${BUILD_DATE:-not specified}"
-echo -e "${LIGHT_BLUE}${BOLD}${V_LINE}${NC} ${CYAN}Author:${NC}     @RenatoAscencio"
-echo -e "${LIGHT_BLUE}${BOLD}${V_LINE}${NC} ${CYAN}Repository:${NC} https://github.com/RenatoAscencio/zender-wa"
-echo -e "${LIGHT_BLUE}${BOLD}${B_LEFT}$(printf '%*s' 60 '' | tr ' ' "${H_LINE}")${B_RIGHT}${NC}\n"
+log_error() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] $*" | tee -a "${ERROR_LOG_FILE}" >&2
+}
 
+log_warning() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [WARN] $*" | tee -a "${SERVICE_LOG_FILE}"
+}
 
-# --- Environment and File Definitions ---
-BASE_DIR="/data/whatsapp-server"
-SERVICE_LOG_FILE="${BASE_DIR}/service.log"
-CRON_LOG_FILE="${BASE_DIR}/cron.log"
-EXECUTABLE_NAME="titansys-whatsapp-linux"
-EXECUTABLE_PATH="${BASE_DIR}/${EXECUTABLE_NAME}"
-DOWNLOAD_URL="${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}"
+# --- Color Definitions ---
+readonly NC='\033[0m'
+readonly BOLD='\033[1m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly CYAN='\033[0;36m'
+readonly LIGHT_RED='\033[1;31m'
+readonly LIGHT_GREEN='\033[1;32m'
+readonly LIGHT_BLUE='\033[1;34m'
+readonly LIGHT_CYAN='\033[1;36m'
 
-# --- Clean Up Logs on Every Start ---
-echo -e "${YELLOW}${BOLD}🧹 Clearing previous log files...${NC}"
-rm -f "${SERVICE_LOG_FILE}" "${CRON_LOG_FILE}" || true
+# --- Helper Functions ---
+print_header() {
+    echo
+    echo -e "${LIGHT_BLUE}${BOLD}╭────────────────────────────────────────────────────────────╮${NC}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}🚀 WhatsApp Server Container - Optimized Version${NC}      ${LIGHT_BLUE}${BOLD}│${NC}"
+    echo -e "${LIGHT_BLUE}${BOLD}├────────────────────────────────────────────────────────────┤${NC}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Version:${NC}    ${VERSION:-unknown}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Build Date:${NC} ${BUILD_DATE:-not specified}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Author:${NC}     @RenatoAscencio"
+    echo -e "${LIGHT_BLUE}${BOLD}╰────────────────────────────────────────────────────────────╯${NC}"
+    echo
+}
 
-# --- Management Commands Creation (Robust Method) ---
-echo -e "${LIGHT_MAGENTA}${BOLD}🔧 Creating management commands...${NC}"
+validate_environment() {
+    log_info "Validating environment..."
 
-# autostart-wa
-AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
-cat << 'EOG_AUTO' > /tmp/autostart-wa.tmp
+    # Check if running as non-root
+    if [[ $EUID -eq 0 ]]; then
+        log_warning "Running as root user. Consider using non-root for security."
+    fi
+
+    # Create necessary directories
+    mkdir -p "${BASE_DIR}" "$(dirname "${SERVICE_LOG_FILE}")"
+
+    # Setup log rotation
+    if command -v logrotate >/dev/null 2>&1; then
+        cat > /tmp/whatsapp-logrotate << EOF
+${SERVICE_LOG_FILE} ${CRON_LOG_FILE} ${ERROR_LOG_FILE} {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    copytruncate
+    maxsize 10M
+}
+EOF
+        sudo mv /tmp/whatsapp-logrotate /etc/logrotate.d/whatsapp 2>/dev/null || true
+    fi
+}
+
+cleanup_old_logs() {
+    log_info "Cleaning up old log files..."
+
+    # Rotate logs if they're too large
+    for logfile in "${SERVICE_LOG_FILE}" "${CRON_LOG_FILE}" "${ERROR_LOG_FILE}"; do
+        if [[ -f "$logfile" ]] && [[ $(stat -f%z "$logfile" 2>/dev/null || stat -c%s "$logfile" 2>/dev/null || echo 0) -gt 10485760 ]]; then
+            mv "$logfile" "${logfile}.old" 2>/dev/null || true
+            touch "$logfile"
+        fi
+    done
+}
+
+# --- Management Script Generator ---
+generate_management_scripts() {
+    log_info "Generating optimized management scripts..."
+
+    local scripts=(
+        "autostart-wa:create_autostart_script"
+        "install-wa:create_install_script"
+        "config-wa:create_config_script"
+        "stop-wa:create_stop_script"
+        "restart-wa:create_restart_script"
+        "update-wa:create_update_script"
+        "status-wa:create_status_script"
+    )
+
+    for script_def in "${scripts[@]}"; do
+        local script_name="${script_def%%:*}"
+        local function_name="${script_def##*:}"
+        local script_path="/usr/local/bin/${script_name}"
+
+        $function_name > "$script_path"
+        chmod +x "$script_path"
+    done
+
+    log_info "Management scripts created successfully"
+}
+
+create_autostart_script() {
+cat << 'EOF'
 #!/bin/bash
-BASE_DIR="/data/whatsapp-server"
-# shellcheck disable=SC2034
-ENV_FILE="${BASE_DIR}/.env"
-# shellcheck disable=SC2034
-PID_FILE="${BASE_DIR}/service.pid"
-SERVICE_LOG_FILE="${BASE_DIR}/service.log"
-CRON_LOG_FILE="${BASE_DIR}/cron.log"
-EXECUTABLE_NAME="titansys-whatsapp-linux"
-exec >> ${CRON_LOG_FILE} 2>&1
-echo "---"
-echo "Cron job ran at: $(date)"
-if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
-  echo "Service is already running with PID $(cat "${PID_FILE}")."
-  exit 0
+set -euo pipefail
+
+readonly BASE_DIR="/data/whatsapp-server"
+readonly ENV_FILE="${BASE_DIR}/.env"
+readonly PID_FILE="${BASE_DIR}/service.pid"
+readonly SERVICE_LOG_FILE="${BASE_DIR}/service.log"
+readonly CRON_LOG_FILE="${BASE_DIR}/cron.log"
+readonly EXECUTABLE_NAME="titansys-whatsapp-linux"
+
+log_info() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [AUTOSTART] $*" >> "${CRON_LOG_FILE}"
+}
+
+# Check if service is already running
+if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+    log_info "Service already running with PID $(cat "${PID_FILE}")"
+    exit 0
 fi
-if [ ! -f "${ENV_FILE}" ]; then
-  echo "Info: .env file not found. Service is not configured to run yet."
-  exit 0
+
+# Check if configuration exists
+if [[ ! -f "${ENV_FILE}" ]]; then
+    log_info "Configuration file not found. Skipping autostart."
+    exit 0
 fi
+
+# Clean up stale PID file
 rm -f "${PID_FILE}"
-echo "Service not running. Attempting to start..."
-set -a; source ${ENV_FILE}; set +a
-cd "${BASE_DIR}"
-nohup ./${EXECUTABLE_NAME} --pcode="$PCODE" --key="$KEY" --host="0.0.0.0" --port="$PORT" >> "${SERVICE_LOG_FILE}" 2>&1 &
-PID=$!
-echo "${PID}" > "${PID_FILE}"
-echo "Start command issued. Service running with PID ${PID}."
-EOG_AUTO
-tr -d '\r' < /tmp/autostart-wa.tmp > "${AUTOSTART_SCRIPT_PATH}"
-rm /tmp/autostart-wa.tmp
 
-# install-wa
-cat << 'EOG_INSTALL' > /tmp/install-wa.tmp
+# Source environment variables
+set -a; source "${ENV_FILE}"; set +a
+
+# Validate required variables
+if [[ -z "${PCODE:-}" ]] || [[ -z "${KEY:-}" ]]; then
+    log_info "Missing required configuration. Please run config-wa"
+    exit 1
+fi
+
+# Start the service
+log_info "Starting WhatsApp service..."
+cd "${BASE_DIR}"
+
+nohup "./${EXECUTABLE_NAME}" \
+    --pcode="$PCODE" \
+    --key="$KEY" \
+    --host="0.0.0.0" \
+    --port="${PORT:-443}" \
+    >> "${SERVICE_LOG_FILE}" 2>&1 &
+
+local pid=$!
+echo "$pid" > "${PID_FILE}"
+log_info "Service started with PID $pid"
+EOF
+}
+
+create_install_script() {
+cat << 'EOF'
 #!/bin/bash
-set -e
-AUTOSTART_SCRIPT_PATH="/usr/local/bin/autostart-wa"
-echo "--- WhatsApp Service Initial Installation ---"
-if [ -n "$PCODE" ] && [ -n "$KEY" ]; then
-    echo "✅ Environment variables found. Creating .env file automatically..."
-    {
-        echo "PORT=${PORT:-443}"
-        echo "PCODE=$PCODE"
-        echo "KEY=$KEY"
-    } > "/data/whatsapp-server/.env"
-elif [ ! -f "/data/whatsapp-server/.env" ]; then
-    echo "⚠️ No .env file or environment variables found. Starting interactive setup..."
+set -euo pipefail
+
+echo "--- WhatsApp Service Installation ---"
+
+# Auto-configuration from environment variables
+if [[ -n "${PCODE:-}" ]] && [[ -n "${KEY:-}" ]]; then
+    echo "✅ Environment variables detected. Creating configuration..."
+    cat > "/data/whatsapp-server/.env" << EOL
+PORT=${PORT:-443}
+PCODE=$PCODE
+KEY=$KEY
+EOL
+elif [[ ! -f "/data/whatsapp-server/.env" ]]; then
+    echo "⚠️ No configuration found. Starting interactive setup..."
     /usr/local/bin/config-wa
 fi
-echo "🕒 Configuring and starting cron job for auto-restart..."
-service cron start
-echo "Waiting for cron service to be ready..."
-sleep 5
-(crontab -l 2>/dev/null | { grep -Fxq "@reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1" || echo "@reboot ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"; grep -Fxq "* * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1" || echo "* * * * * ${AUTOSTART_SCRIPT_PATH} >/dev/null 2>&1"; }) | crontab -
-echo "✅ Cron job configured. Waiting a moment..."
-sleep 5
-echo "🚀 Triggering service start..."
+
+# Setup cron for auto-restart
+echo "🕒 Configuring auto-restart service..."
+if command -v crond >/dev/null 2>&1; then
+    crond -b
+    sleep 2
+
+    # Add cron jobs
+    (crontab -l 2>/dev/null || true; echo "* * * * * /usr/local/bin/autostart-wa >/dev/null 2>&1") | \
+        sort -u | crontab -
+
+    echo "✅ Auto-restart configured"
+else
+    echo "⚠️ Cron not available. Manual restart required"
+fi
+
+# Start the service
+echo "🚀 Starting service..."
 /usr/local/bin/autostart-wa
 sleep 3
 /usr/local/bin/status-wa
-EOG_INSTALL
-tr -d '\r' < /tmp/install-wa.tmp > /usr/local/bin/install-wa
-rm /tmp/install-wa.tmp
+EOF
+}
 
-# config-wa
-cat << 'EOG_CONFIG' > /tmp/config-wa.tmp
+create_config_script() {
+cat << 'EOF'
 #!/bin/bash
-set -e
-echo "--- Interactive .env Configuration ---"
-if [ -f "/data/whatsapp-server/.env" ]; then set -a; source "/data/whatsapp-server/.env"; set +a; fi
-read -p "Enter PORT [current: ${PORT:-443}]: " PORT_INPUT; PORT=${PORT_INPUT:-$PORT}
-read -p "Enter your PCODE [current: ${PCODE}]: " PCODE_INPUT; PCODE=${PCODE_INPUT:-$PCODE}
-read -p "Enter your KEY [current: ${KEY}]: " KEY_INPUT; KEY=${KEY_INPUT:-$KEY}
-echo "Creating/updating .env file..."; { echo "PORT=$PORT"; echo "PCODE=$PCODE"; echo "KEY=$KEY"; } > "/data/whatsapp-server/.env"
-echo "✅ .env file updated. Please run 'restart-wa' to apply the changes."
-EOG_CONFIG
-tr -d '\r' < /tmp/config-wa.tmp > /usr/local/bin/config-wa
-rm /tmp/config-wa.tmp
+set -euo pipefail
 
-# stop-wa
-cat << 'EOG_STOP' > /tmp/stop-wa.tmp
+echo "--- Interactive Configuration ---"
+
+# Load existing configuration if available
+if [[ -f "/data/whatsapp-server/.env" ]]; then
+    set -a; source "/data/whatsapp-server/.env"; set +a
+fi
+
+# Interactive configuration
+read -p "Enter PORT [${PORT:-443}]: " port_input
+PORT="${port_input:-${PORT:-443}}"
+
+read -p "Enter PCODE [${PCODE:-}]: " pcode_input
+PCODE="${pcode_input:-${PCODE:-}}"
+
+read -p "Enter KEY [${KEY:-}]: " key_input
+KEY="${key_input:-${KEY:-}}"
+
+# Validate inputs
+if [[ -z "$PCODE" ]] || [[ -z "$KEY" ]]; then
+    echo "❌ PCODE and KEY are required"
+    exit 1
+fi
+
+# Save configuration
+cat > "/data/whatsapp-server/.env" << EOL
+PORT=$PORT
+PCODE=$PCODE
+KEY=$KEY
+EOL
+
+echo "✅ Configuration saved. Run 'restart-wa' to apply changes."
+EOF
+}
+
+create_stop_script() {
+cat << 'EOF'
 #!/bin/bash
-# shellcheck disable=SC2034
-PID_FILE="/data/whatsapp-server/service.pid"
-EXECUTABLE_NAME="titansys-whatsapp-linux"
-echo -e "🛑 Stopping the WhatsApp service..."
-if [ ! -f "${PID_FILE}" ]; then
-    echo "PID file not found. Is the service running? Attempting to stop by name as a fallback."
-    pkill -f "${EXECUTABLE_NAME}" || true
-else
-    PID=$(cat "${PID_FILE}")
-    if ps -p "$PID" > /dev/null 2>&1; then
-        echo "Stopping process with PID ${PID}..."
-        kill "${PID}"
-        for i in {1..10}; do
-            if ! kill -0 "${PID}" > /dev/null 2>&1; then
-                echo -e "\nProcess stopped."
-                break
-            fi
-            echo -n "."
-            sleep 1
-        done
-        if kill -0 "${PID}" > /dev/null 2>&1; then
-            echo -e "\nProcess did not stop with SIGTERM, forcing kill..."
-            kill -9 "${PID}" || true
-            sleep 1
-        fi
-    else
-        echo "Process with PID ${PID} does not exist. Cleaning up PID file."
-    fi
+set -euo pipefail
+
+readonly PID_FILE="/data/whatsapp-server/service.pid"
+readonly EXECUTABLE_NAME="titansys-whatsapp-linux"
+
+echo "🛑 Stopping WhatsApp service..."
+
+if [[ ! -f "${PID_FILE}" ]]; then
+    echo "No PID file found. Attempting graceful shutdown..."
+    pkill -f "${EXECUTABLE_NAME}" 2>/dev/null || true
+    echo "Service stopped"
+    exit 0
+fi
+
+local pid
+pid=$(cat "${PID_FILE}")
+
+if ! kill -0 "$pid" 2>/dev/null; then
+    echo "Process $pid not running. Cleaning up..."
     rm -f "${PID_FILE}"
+    exit 0
 fi
-echo "Service stopped. The cron job will restart it within a minute."
-EOG_STOP
-tr -d '\r' < /tmp/stop-wa.tmp > /usr/local/bin/stop-wa
-rm /tmp/stop-wa.tmp
 
-# restart-wa
-cat << 'EOG_RESTART' > /tmp/restart-wa.tmp
+# Graceful shutdown
+echo "Sending SIGTERM to process $pid..."
+kill "$pid"
+
+# Wait for graceful shutdown
+for i in {1..15}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+        echo "Process stopped gracefully"
+        rm -f "${PID_FILE}"
+        exit 0
+    fi
+    echo -n "."
+    sleep 1
+done
+
+# Force kill if needed
+echo ""
+echo "Process did not stop gracefully. Force killing..."
+kill -9 "$pid" 2>/dev/null || true
+rm -f "${PID_FILE}"
+echo "Process force stopped"
+EOF
+}
+
+create_restart_script() {
+cat << 'EOF'
 #!/bin/bash
-echo "🔄 Restarting the WhatsApp service...";
+set -euo pipefail
+
+echo "🔄 Restarting WhatsApp service..."
 /usr/local/bin/stop-wa
-sleep 2;
-echo "Triggering immediate restart...";
+sleep 3
 /usr/local/bin/autostart-wa
-sleep 1
+sleep 2
 /usr/local/bin/status-wa
-EOG_RESTART
-tr -d '\r' < /tmp/restart-wa.tmp > /usr/local/bin/restart-wa
-rm /tmp/restart-wa.tmp
+EOF
+}
 
-# update-wa
-cat << 'EOG_UPDATE' > /tmp/update-wa.tmp
+create_update_script() {
+cat << 'EOF'
 #!/bin/bash
-DOWNLOAD_URL="${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}"
-set -e
-echo "--- Updating WhatsApp Service Binary ---"
+set -euo pipefail
+
+readonly DOWNLOAD_URL="${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}"
+readonly BASE_DIR="/data/whatsapp-server"
+
+echo "--- Binary Update ---"
+
+# Stop service
 /usr/local/bin/stop-wa
-echo "Downloading latest binary from ${DOWNLOAD_URL}..."
-cd "/data/whatsapp-server"
-if ! curl -fsSL "${DOWNLOAD_URL}" -o linux.zip; then
-    echo "Error: failed to download binary."
-    exit 1
-fi
-if [ ! -f linux.zip ]; then
-    echo "Error: linux.zip not found after download."
-    exit 1
-fi
-if [ -n "${DOWNLOAD_SHA256}" ]; then
-    if ! echo "${DOWNLOAD_SHA256}  linux.zip" | sha256sum -c -; then
-        echo "Error: checksum verification failed.";
-        rm -f linux.zip
-        exit 1
-    fi
-fi
-if ! unzip -oq linux.zip; then
-    echo "Error: failed to unzip linux.zip."
-    rm -f linux.zip
-    exit 1
-fi
-rm linux.zip
-chmod +x "titansys-whatsapp-linux"
-echo "✅ Update complete. Triggering immediate restart...";
-/usr/local/bin/autostart-wa
-EOG_UPDATE
-tr -d '\r' < /tmp/update-wa.tmp > /usr/local/bin/update-wa
-rm /tmp/update-wa.tmp
 
-# status-wa
-cat << 'EOG_STATUS' > /tmp/status-wa.tmp
-#!/bin/bash
-# shellcheck disable=SC2034
-PID_FILE="/data/whatsapp-server/service.pid"
-SERVICE_LOG_FILE="/data/whatsapp-server/service.log"
-GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'; BOLD='\033[1m';
-echo "--- WhatsApp Service Status ---"
-if [ -f "${PID_FILE}" ] && kill -0 "$(cat "${PID_FILE}")" > /dev/null 2>&1; then
-    echo -e "${GREEN}${BOLD}✅ Service is RUNNING${NC} with PID $(cat "${PID_FILE}")."
+# Backup current binary
+if [[ -f "${BASE_DIR}/titansys-whatsapp-linux" ]]; then
+    cp "${BASE_DIR}/titansys-whatsapp-linux" "${BASE_DIR}/titansys-whatsapp-linux.backup"
+fi
+
+# Download with retry logic
+echo "Downloading from ${DOWNLOAD_URL}..."
+cd "$BASE_DIR"
+
+for attempt in {1..3}; do
+    if curl -fsSL --connect-timeout 30 "${DOWNLOAD_URL}" -o linux.zip; then
+        break
+    fi
+    echo "Download attempt $attempt failed. Retrying..."
+    sleep 5
+done
+
+if [[ ! -f linux.zip ]]; then
+    echo "❌ Download failed after 3 attempts"
+    exit 1
+fi
+
+# Verify and extract
+if unzip -tq linux.zip; then
+    unzip -oq linux.zip
+    rm linux.zip
+    chmod +x "titansys-whatsapp-linux"
+    echo "✅ Update successful"
 else
-    echo -e "${RED}${BOLD}❌ Service is STOPPED.${NC}"
-fi
-echo -e "To see detailed logs, run: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
-EOG_STATUS
-tr -d '\r' < /tmp/status-wa.tmp > /usr/local/bin/status-wa
-rm /tmp/status-wa.tmp
-
-# Make all scripts executable
-chmod +x /usr/local/bin/install-wa /usr/local/bin/stop-wa /usr/local/bin/restart-wa /usr/local/bin/update-wa /usr/local/bin/config-wa /usr/local/bin/status-wa /usr/local/bin/autostart-wa
-
-echo -e "${LIGHT_GREEN}${BOLD}✅ All management commands created successfully.${NC}\n"
-
-# --- Main Entrypoint Logic ---
-echo -e "${YELLOW}${BOLD}📦 Preparing environment...${NC}"
-if [ ! -f "${EXECUTABLE_PATH}" ]; then
-  echo "Downloading binary for the first time from ${DOWNLOAD_URL}..."
-  cd "${BASE_DIR}"
-  if ! curl -fsSL "${DOWNLOAD_URL}" -o linux.zip; then
-    echo "Error: failed to download binary."
-    exit 1
-  fi
-  if [ ! -f linux.zip ]; then
-    echo "Error: linux.zip not found after download."
-    exit 1
-  fi
-  if [ -n "${DOWNLOAD_SHA256}" ]; then
-    if ! echo "${DOWNLOAD_SHA256}  linux.zip" | sha256sum -c -; then
-      echo "Error: checksum verification failed."
-      rm -f linux.zip
-      exit 1
-    fi
-  fi
-  if ! unzip -oq linux.zip; then
-    echo "Error: failed to unzip linux.zip."
+    echo "❌ Downloaded file is corrupted"
     rm -f linux.zip
     exit 1
-  fi
-  rm linux.zip
-  chmod +x "${EXECUTABLE_NAME}"
 fi
 
-# --- Final Instructions ---
-print_box "🔴 ACTION REQUIRED" "${LIGHT_RED}"
-echo -e "${LIGHT_RED}${BOLD}${V_LINE}${NC} The container is ready for setup."
-echo -e "${LIGHT_RED}${BOLD}${V_LINE}${NC}"
-echo -e "${LIGHT_RED}${BOLD}${V_LINE}${NC}   1. Open a shell into this container."
-echo -e "${LIGHT_RED}${BOLD}${V_LINE}${NC}   2. Run the command: ${LIGHT_GREEN}install-wa${NC}"
-echo -e "${LIGHT_RED}${BOLD}${B_LEFT}$(printf '%*s' 60 '' | tr ' ' "${H_LINE}")${B_RIGHT}${NC}\n"
+# Start service
+/usr/local/bin/autostart-wa
+/usr/local/bin/status-wa
+EOF
+}
 
-print_box "📖 Available Commands" "${LIGHT_CYAN}"
-echo -e "${LIGHT_CYAN}${BOLD}${V_LINE}${NC} ${GREEN}install-wa${NC} : Performs the first-time setup."
-echo -e "${LIGHT_CYAN}${BOLD}${V_LINE}${NC} ${GREEN}config-wa${NC}  : Edits the .env variables interactively."
-echo -e "${LIGHT_CYAN}${BOLD}${V_LINE}${NC} ${GREEN}update-wa${NC}  : Downloads the latest version of the binary."
-echo -e "${LIGHT_CYAN}${BOLD}${V_LINE}${NC} ${GREEN}restart-wa${NC} : Restarts the service."
-echo -e "${LIGHT_CYAN}${BOLD}${V_LINE}${NC} ${GREEN}stop-wa${NC}    : Stops the service."
-echo -e "${LIGHT_CYAN}${BOLD}${V_LINE}${NC} ${GREEN}status-wa${NC}  : Checks the current status of the service."
-echo -e "${LIGHT_CYAN}${BOLD}${B_LEFT}$(printf '%*s' 60 '' | tr ' ' "${H_LINE}")${B_RIGHT}${NC}"
+create_status_script() {
+cat << 'EOF'
+#!/bin/bash
 
-# Keep the container alive indefinitely
-exec sleep infinity
+readonly PID_FILE="/data/whatsapp-server/service.pid"
+readonly SERVICE_LOG_FILE="/data/whatsapp-server/service.log"
+readonly GREEN='\033[0;32m'
+readonly RED='\033[0;31m'
+readonly YELLOW='\033[1;33m'
+readonly NC='\033[0m'
+readonly BOLD='\033[1m'
+
+echo "--- WhatsApp Service Status ---"
+
+if [[ -f "${PID_FILE}" ]] && kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
+    local pid
+    pid=$(cat "${PID_FILE}")
+    local uptime
+    uptime=$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ' || echo "unknown")
+
+    echo -e "${GREEN}${BOLD}✅ Service is RUNNING${NC}"
+    echo -e "   PID: $pid"
+    echo -e "   Uptime: $uptime"
+else
+    echo -e "${RED}${BOLD}❌ Service is STOPPED${NC}"
+fi
+
+echo
+echo -e "📊 System Information:"
+echo -e "   Memory: $(free -h 2>/dev/null | awk '/^Mem:/ {print $3"/"$2}' || echo 'N/A')"
+echo -e "   Disk: $(df -h /data 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5")"}' || echo 'N/A')"
+
+echo
+echo -e "📋 Log Commands:"
+echo -e "   Service logs: ${YELLOW}tail -f ${SERVICE_LOG_FILE}${NC}"
+echo -e "   Error logs:   ${YELLOW}tail -f /data/whatsapp-server/error.log${NC}"
+EOF
+}
+
+# --- Signal Handling ---
+cleanup() {
+    log_info "Received shutdown signal. Cleaning up..."
+    if [[ -f "$PID_FILE" ]]; then
+        local pid
+        pid=$(cat "$PID_FILE")
+        if kill -0 "$pid" 2>/dev/null; then
+            log_info "Stopping service with PID $pid"
+            kill -TERM "$pid" 2>/dev/null || true
+            sleep 5
+        fi
+    fi
+    exit 0
+}
+
+trap cleanup SIGTERM SIGINT
+
+# --- Main Execution ---
+main() {
+    print_header
+    validate_environment
+    cleanup_old_logs
+    generate_management_scripts
+
+    log_info "Container initialization complete"
+
+    # Display usage instructions
+    echo -e "${LIGHT_RED}${BOLD}🔴 Next Steps:${NC}"
+    echo -e "   1. Access container shell: ${GREEN}docker exec -it <container> bash${NC}"
+    echo -e "   2. Run setup: ${GREEN}install-wa${NC}"
+    echo
+    echo -e "${LIGHT_CYAN}${BOLD}📖 Available Commands:${NC}"
+    echo -e "   ${GREEN}install-wa${NC}  - Initial setup and configuration"
+    echo -e "   ${GREEN}config-wa${NC}   - Modify configuration interactively"
+    echo -e "   ${GREEN}update-wa${NC}   - Update to latest binary version"
+    echo -e "   ${GREEN}restart-wa${NC}  - Restart the service"
+    echo -e "   ${GREEN}stop-wa${NC}     - Stop the service"
+    echo -e "   ${GREEN}status-wa${NC}   - Check service status and health"
+    echo
+
+    # Keep container alive
+    exec sleep infinity
+}
+
+# Execute main function
+main "$@"

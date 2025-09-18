@@ -1,44 +1,86 @@
 # -----------------------------------------------------------------------------
-# WhatsApp Server Docker Image
+# Optimized WhatsApp Server Docker Image
 #
 # Author: @RenatoAscencio
 # Repository: https://github.com/RenatoAscencio/zender-wa
+# Optimizations: Multi-stage build, Alpine base, security improvements
 # -----------------------------------------------------------------------------
 
-# Use Ubuntu 22.04 as the base system
-FROM ubuntu:22.04
+# --- Build Stage ---
+FROM alpine:3.19 AS builder
 
-# --- Build-time Arguments and Environment Variables ---
-# These arguments are passed during the build process by GitHub Actions
+# Install only build dependencies
+RUN apk add --no-cache \
+    curl \
+    unzip \
+    ca-certificates
+
+# Create directory structure
+WORKDIR /build
+ARG DOWNLOAD_URL_OVERRIDE
+ENV DOWNLOAD_URL=${DOWNLOAD_URL_OVERRIDE:-https://raw.anycdn.link/wa/linux.zip}
+
+# Download and extract binary during build
+RUN curl -fsSL "${DOWNLOAD_URL}" -o linux.zip && \
+    unzip -q linux.zip && \
+    chmod +x titansys-whatsapp-linux && \
+    rm linux.zip
+
+# --- Runtime Stage ---
+FROM alpine:3.19
+
+# Build-time arguments
 ARG BUILD_DATE
 ARG VERSION
 
-# These environment variables make the build arguments available inside the container
-ENV BUILD_DATE=$BUILD_DATE
-ENV VERSION=$VERSION
+# Environment variables
+ENV BUILD_DATE=$BUILD_DATE \
+    VERSION=$VERSION \
+    BASE_DIR="/data/whatsapp-server" \
+    EXECUTABLE_NAME="titansys-whatsapp-linux"
 
-# Avoid interactive prompts during package installation
-ENV DEBIAN_FRONTEND=noninteractive
+# Create non-root user for security
+RUN addgroup -g 1001 -S whatsapp && \
+    adduser -u 1001 -S whatsapp -G whatsapp
 
-# Set the working directory. This MUST be an absolute path.
-WORKDIR /data/whatsapp-server
+# Install runtime dependencies only
+RUN apk add --no-cache \
+    bash \
+    curl \
+    procps \
+    dcron \
+    tzdata \
+    ca-certificates && \
+    # Clean up
+    rm -rf /var/cache/apk/*
 
-# Install dependencies and clean up
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends cron curl unzip procps ca-certificates nano && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Create directory structure with proper permissions
+RUN mkdir -p ${BASE_DIR} && \
+    chown -R whatsapp:whatsapp ${BASE_DIR}
 
-# Copy the main entrypoint script
-COPY entrypoint.sh /usr/local/bin/
+# Copy entrypoint script
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Declare the volume that will be used for persistent data.
-VOLUME /data/whatsapp-server
+# Copy binary from build stage
+COPY --from=builder /build/titansys-whatsapp-linux ${BASE_DIR}/
+RUN chown whatsapp:whatsapp ${BASE_DIR}/${EXECUTABLE_NAME}
 
-# Expose the port
+# Set working directory
+WORKDIR ${BASE_DIR}
+
+# Create volume for persistent data
+VOLUME ${BASE_DIR}
+
+# Expose port
 EXPOSE 443
-HEALTHCHECK CMD /usr/local/bin/status-wa || exit 1
 
-# The command that will run when the container starts
-ENTRYPOINT ["entrypoint.sh"]
+# Improved healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD /usr/local/bin/status-wa || exit 1
+
+# Switch to non-root user
+USER whatsapp
+
+# Entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
