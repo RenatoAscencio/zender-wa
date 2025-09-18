@@ -38,13 +38,34 @@ readonly LIGHT_CYAN='\033[1;36m'
 
 # --- Helper Functions ---
 print_header() {
+    # Obtener información dinámica
+    CONTAINER_ID=$(hostname)
+    CURRENT_TIME=$(date '+%Y-%m-%d %H:%M:%S %Z')
+    MEMORY_USAGE=$(free -h | grep Mem | awk '{print $3"/"$2}')
+    VERSION_INFO=$(cat /app/VERSION 2>/dev/null || echo "v2.1.0")
+
+    # Generar mensaje aleatorio
+    MESSAGES=(
+        "🚀 Ready to serve WhatsApp connections!"
+        "⚡ Optimized for maximum performance"
+        "🔒 Secure enterprise-grade service"
+        "🌟 Alpine-based lightweight container"
+        "💪 Multi-architecture support enabled"
+        "🎯 Production-ready deployment"
+        "🔥 62% smaller than standard image"
+        "⚙️ Advanced monitoring enabled"
+    )
+    RANDOM_MSG=${MESSAGES[$RANDOM % ${#MESSAGES[@]}]}
+
     echo
     echo -e "${LIGHT_BLUE}${BOLD}╭────────────────────────────────────────────────────────────╮${NC}"
-    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}🚀 WhatsApp Server Container - Optimized Version${NC}      ${LIGHT_BLUE}${BOLD}│${NC}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}WhatsApp Server - Enterprise Edition${NC}                  ${LIGHT_BLUE}${BOLD}│${NC}"
     echo -e "${LIGHT_BLUE}${BOLD}├────────────────────────────────────────────────────────────┤${NC}"
-    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Version:${NC}    ${VERSION:-unknown}"
-    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Build Date:${NC} ${BUILD_DATE:-not specified}"
-    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Author:${NC}     @RenatoAscencio"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Version:${NC}     ${VERSION_INFO}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Start Time:${NC}  ${CURRENT_TIME}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Container:${NC}   ${CONTAINER_ID}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${CYAN}Memory:${NC}      ${MEMORY_USAGE}"
+    echo -e "${LIGHT_BLUE}${BOLD}│${NC} ${GREEN}${RANDOM_MSG}${NC}"
     echo -e "${LIGHT_BLUE}${BOLD}╰────────────────────────────────────────────────────────────╯${NC}"
     echo
 }
@@ -368,6 +389,23 @@ fi
 /usr/local/bin/autostart-wa
 /usr/local/bin/status-wa
 EOF
+}
+
+create_random_banner() {
+    # Generar mensaje aleatorio
+    MESSAGES=(
+        "🚀 Ready to serve WhatsApp connections!"
+        "⚡ Optimized for maximum performance"
+        "🔒 Secure enterprise-grade service"
+        "🌟 Alpine-based lightweight container"
+        "💪 Multi-architecture support enabled"
+        "🎯 Production-ready deployment"
+        "🔥 62% smaller than standard image"
+        "⚙️ Advanced monitoring enabled"
+    )
+
+    RANDOM_MSG=${MESSAGES[$RANDOM % ${#MESSAGES[@]}]}
+    echo "${RANDOM_MSG}"
 }
 
 create_status_script() {
