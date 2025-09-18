@@ -131,14 +131,25 @@ jobs:
             zender-wa:test
 
           # Wait for container to initialize
+          echo "Waiting for container initialization..."
           sleep 30
 
-          # Test management commands
-          docker exec test-container bash -c "
-            /usr/local/bin/validation.sh --system
-            /usr/local/bin/healthcheck.sh || true
-            status-wa
-          "
+          # Check if container is running
+          if ! docker ps | grep -q test-container; then
+            echo "❌ Container failed to start"
+            docker logs test-container
+            exit 1
+          fi
+
+          # Test basic functionality (status-wa command should be available)
+          echo "Testing status command..."
+          docker exec test-container status-wa || {
+            echo "❌ Status command failed"
+            docker logs test-container
+            exit 1
+          }
+
+          echo "✅ Integration tests passed!"
 
           # Cleanup
           docker stop test-container
