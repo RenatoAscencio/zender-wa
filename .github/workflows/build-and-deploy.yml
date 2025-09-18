@@ -162,13 +162,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -179,9 +172,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            renatoascencio/zender-wa
+          images: renatoascencio/zender-wa
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -217,13 +208,6 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -232,13 +216,7 @@ jobs:
 
       - name: Create and push manifest
         run: |
-          # GitHub Container Registry
-          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized-linux-amd64 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized-linux-arm64 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized-linux-arm-v7
-
-          # Docker Hub
+          # Docker Hub only
           docker buildx imagetools create -t renatoascencio/zender-wa:optimized \
             renatoascencio/zender-wa:optimized-linux-amd64 \
             renatoascencio/zender-wa:optimized-linux-arm64 \
@@ -260,7 +238,7 @@ jobs:
       - name: Run Trivy vulnerability scanner on image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:optimized'
+          image-ref: 'renatoascencio/zender-wa:optimized'
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
