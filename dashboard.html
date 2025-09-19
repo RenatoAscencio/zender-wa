@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Zender WA - Dashboard de Deployments</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-card .number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .label {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .deployments {
+            padding: 30px;
+        }
+
+        .deployments h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .deployment {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            border-left: 5px solid #4CAF50;
+        }
+
+        .deployment.failed {
+            border-left-color: #f44336;
+        }
+
+        .deployment-icon {
+            font-size: 1.5em;
+            margin-right: 15px;
+        }
+
+        .deployment-content {
+            flex: 1;
+        }
+
+        .deployment-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .deployment-meta {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .deployment-duration {
+            color: #2196F3;
+            font-weight: bold;
+            margin-left: auto;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 1.5em;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.3);
+            transition: transform 0.3s;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Zender WhatsApp Server</h1>
+            <p>Dashboard de Deployments en Tiempo Real</p>
+        </div>
+
+        <div class="stats" id="stats">
+            <!-- Las estadísticas se cargarán aquí -->
+        </div>
+
+        <div class="deployments">
+            <h2>📋 Historial de Deployments</h2>
+            <div id="deployment-list">
+                <!-- Los deployments se cargarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="loadData()" title="Actualizar">
+        🔄
+    </button>
+
+    <script>
+        // Datos de ejemplo (en producción vendría de DEPLOYMENT_HISTORY.json)
+        const sampleData = {
+            "deployments": [
+                {
+                    "id": "deploy-001",
+                    "date": "2025-09-19T00:25:00Z",
+                    "version": "latest",
+                    "status": "success",
+                    "duration": "35 seconds",
+                    "type": "config",
+                    "description": "EasyPanel Template Update",
+                    "changes": ["Uso de tag 'latest' por defecto", "Actualizaciones automáticas habilitadas"]
+                },
+                {
+                    "id": "deploy-002",
+                    "date": "2025-09-19T00:05:00Z",
+                    "version": "v2.1.3",
+                    "status": "success",
+                    "duration": "40 seconds",
+                    "type": "security",
+                    "description": "Security Hardening - Alpine Edge",
+                    "changes": ["Cambio a Alpine Edge", "Hardening adicional de seguridad"]
+                },
+                {
+                    "id": "deploy-003",
+                    "date": "2025-09-18T23:45:00Z",
+                    "version": "v2.1.2",
+                    "status": "success",
+                    "duration": "42 seconds",
+                    "type": "security",
+                    "description": "Security Update - Alpine 3.21",
+                    "changes": ["Actualización a Alpine Linux 3.21", "Parches de vulnerabilidades CVE"]
+                }
+            ],
+            "statistics": {
+                "total_deployments": 5,
+                "successful": 5,
+                "failed": 0,
+                "average_duration": "40 seconds",
+                "last_deployment": "2025-09-19T00:25:00Z"
+            }
+        };
+
+        function getTypeIcon(type) {
+            const icons = {
+                'release': '🚀',
+                'feature': '✨',
+                'security': '🔒',
+                'config': '⚙️',
+                'hotfix': '🔥',
+                'build': '📦'
+            };
+            return icons[type] || '📦';
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function loadStats(data) {
+            const stats = data.statistics;
+            const successRate = Math.round((stats.successful / stats.total_deployments) * 100);
+
+            document.getElementById('stats').innerHTML = `
+                <div class="stat-card">
+                    <div class="number">${stats.total_deployments}</div>
+                    <div class="label">Total Deployments</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">${stats.successful}</div>
+                    <div class="label">Exitosos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">${stats.failed}</div>
+                    <div class="label">Fallidos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">${successRate}%</div>
+                    <div class="label">Tasa de Éxito</div>
+                </div>
+            `;
+        }
+
+        function loadDeployments(data) {
+            const deploymentList = document.getElementById('deployment-list');
+
+            deploymentList.innerHTML = data.deployments.map(deployment => `
+                <div class="deployment ${deployment.status === 'failed' ? 'failed' : ''}">
+                    <div class="deployment-icon">
+                        ${deployment.status === 'success' ? '✅' : '❌'} ${getTypeIcon(deployment.type)}
+                    </div>
+                    <div class="deployment-content">
+                        <div class="deployment-title">
+                            ${deployment.version} - ${deployment.description}
+                        </div>
+                        <div class="deployment-meta">
+                            ${formatDate(deployment.date)} | Tipo: ${deployment.type}
+                        </div>
+                    </div>
+                    <div class="deployment-duration">
+                        ${deployment.duration}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function loadData() {
+            // En producción, esto haría fetch a DEPLOYMENT_HISTORY.json
+            // fetch('./DEPLOYMENT_HISTORY.json')
+            //   .then(response => response.json())
+            //   .then(data => {
+            //     loadStats(data);
+            //     loadDeployments(data);
+            //   });
+
+            // Por ahora usamos datos de ejemplo
+            loadStats(sampleData);
+            loadDeployments(sampleData);
+        }
+
+        // Cargar datos al inicializar
+        loadData();
+
+        // Auto-refresh cada 30 segundos
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

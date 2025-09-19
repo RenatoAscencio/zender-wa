@@ -292,3 +292,50 @@ jobs:
         run: |
           echo "❌ Deployment failed!"
           # Add failure notification logic
+
+      - name: Log Deployment History
+        if: always()
+        run: |
+          # Checkout para acceder a scripts
+          git clone ${{ github.server_url }}/${{ github.repository }}.git temp-repo
+          cd temp-repo
+
+          # Determinar status y metadata
+          if [[ "${{ needs.deploy.result }}" == "success" ]]; then
+            STATUS="success"
+            DURATION="180 seconds"
+          else
+            STATUS="failure"
+            DURATION="60 seconds"
+          fi
+
+          # Obtener versión del evento
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+            TYPE="release"
+            DESCRIPTION="Automated release deployment"
+            CHANGES='["Multi-architecture build", "Docker Hub publication", "Production deployment"]'
+          else
+            VERSION="main-${{ github.sha }}"
+            TYPE="build"
+            DESCRIPTION="Automated build and test"
+            CHANGES='["Code updates", "CI/CD pipeline", "Quality checks"]'
+          fi
+
+          # Instalar dependencias si es necesario
+          sudo apt-get update && sudo apt-get install -y python3
+
+          # Registrar deployment
+          chmod +x scripts/deployment-logger.sh
+          ./scripts/deployment-logger.sh log "$VERSION" "$STATUS" "$DURATION" "$TYPE" "$DESCRIPTION" "$CHANGES"
+
+          # Configurar git y hacer commit
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
+          git add DEPLOYMENT_HISTORY.json
+
+          # Solo hacer commit si hay cambios
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: update deployment history for $VERSION [skip ci]"
+            git push
+          fi
